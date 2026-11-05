@@ -1,0 +1,6 @@
+.vs
+x64/
+Debug
+configInicial/Debug
+External Libraries/
+*.vcxproj.user
