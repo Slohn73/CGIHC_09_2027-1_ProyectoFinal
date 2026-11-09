@@ -11,6 +11,10 @@
 
 #include <iostream>
 #include <cmath>
+#include <string>
+#include <cctype>
+#include <vector>
+#include <filesystem>
 
 // GLEW
 #include <GL/glew.h>
@@ -42,7 +46,7 @@ const GLuint WIDTH = 800, HEIGHT = 600;
 int SCREEN_WIDTH, SCREEN_HEIGHT;
 
 // Cámara posicionada para tener perspectiva general de la cancha
-Camera  camera(glm::vec3(0.0f, 5.0f, 15.0f));
+Camera  camera(glm::vec3(0.0f, 6.0f, 18.0f));
 GLfloat lastX = WIDTH / 2.0;
 GLfloat lastY = HEIGHT / 2.0;
 bool keys[1024];
@@ -128,6 +132,50 @@ Model* GetSpectatorModel(int index, Model& a, Model& b, Model& c, Model& d, Mode
 	}
 }
 
+static void SetVec3(GLuint program, const std::string& name, float x, float y, float z)
+{
+	glUniform3f(glGetUniformLocation(program, name.c_str()), x, y, z);
+}
+
+static void SetFloat(GLuint program, const std::string& name, float v)
+{
+	glUniform1f(glGetUniformLocation(program, name.c_str()), v);
+}
+
+static std::string ResolveModel(const std::string& path)
+{
+	namespace fs = std::filesystem;
+	std::error_code ec;
+	if (fs::is_regular_file(fs::path(path), ec))
+		return path;
+
+	std::cout << "  [Modelo] NO EXISTE: '" << path << "'" << std::endl;
+	fs::path dir = fs::path(path).parent_path();
+	if (dir.empty()) dir = ".";
+	if (!fs::is_directory(dir, ec))
+	{
+		std::cout << "La carpeta '" << dir.generic_string() << "' tampoco existe (revisa el nombre de la carpeta)." << std::endl;
+		return path;
+	}
+
+	std::cout << "Modelos encontrados en esa carpeta:" << std::endl;
+	bool any = false;
+	for (const auto& entry : fs::recursive_directory_iterator(dir, ec))
+	{
+		if (!entry.is_regular_file(ec)) continue;
+		std::string ext = entry.path().extension().string();
+		for (char& c : ext) c = (char)std::tolower((unsigned char)c);
+		if (ext == ".obj" || ext == ".fbx" || ext == ".gltf" || ext == ".glb" || ext == ".dae" || ext == ".3ds")
+		{
+			std::cout << "             - " << entry.path().generic_string() << std::endl;
+			any = true;
+		}
+	}
+	if (!any)
+		std::cout << "             (no hay ningun archivo de modelo en esa carpeta)" << std::endl;
+	return path;
+}
+
 int main()
 {
 	std::cout << "[DEBUG] Inicializando GLFW..." << std::endl;
@@ -164,35 +212,80 @@ int main()
 
 	// --- Carga de modelos con rutas corregidas ---
 	std::cout << "[DEBUG] Cargando modelos del escenario y nuevos elementos..." << std::endl;
-	Model arbitro((char*)"modelos/arbitro-ruper-design/source/manga ralgla_cuello en v.fbx");
-	Model gradas((char*)"modelos/Gradas/Gradas.obj");
-	Model marcador((char*)"modelos/marcador/marcadorBueno.obj");
-	Model barrera((char*)"modelos/barrera/barrera.obj");
-	Model bocina((char*)"modelos/bocina/bocina.obj");
-	Model camaraObj((char*)"modelos/camara/source/camar.fbx");
-	Model ceilingLights((char*)"modelos/ceiling-lights/source/PTRCUNWM24VXBNKZ/ASSET.fbx");
-	Model mexicanFlag((char*)"modelos/mexican-flag/source/FB SP Mexflag.fbx");
-	Model silla((char*)"modelos/silla_metalica/silla_metalica.fbx");
-	Model mesas((char*)"modelos/mesas/scene.gltf");
-	Model camaraBroadcast((char*)"modelos/set-of-four-4-low-poly-cameras/source/camara_broadcast.obj");
+	Model arbitro(ResolveModel("modelos/arbitro-ruper-design/source/manga ralgla_cuello en v.fbx"));
+	Model gradas(ResolveModel("modelos/Gradas/Gradas.obj"));
+	Model marcador(ResolveModel("modelos/marcador/marcadorBueno.obj"));
+	Model barrera(ResolveModel("modelos/barrera/barrera.obj"));
+	Model bocina(ResolveModel("modelos/bocina/bocina.obj"));
+	Model camaraObj(ResolveModel("modelos/camara/source/camar.fbx"));
+	Model ceilingLights(ResolveModel("modelos/ceiling-lights/source/PTRCUNWM24VXBNKZ/ASSET.fbx"));
+	Model silla(ResolveModel("modelos/silla_metalica/silla_metalica.fbx"));
+	Model mesas(ResolveModel("modelos/mesas/scene.gltf"));
+	Model camaraBroadcast(ResolveModel("modelos/set-of-four-4-low-poly-cameras/source/camara_broadcast.obj"));
 
-	Model balon((char*)"modelos/balonBaloncesto/BalonBaloncesto5.obj");
-	Model bancaConJugador1((char*)"modelos/BancaConJugador/banca_jugador1.obj");
-	Model bancaConJugador2((char*)"modelos/BancaConJugador/banca_jugador2.obj");
-	Model bancaMadera((char*)"modelos/BancaMadera/banca.obj");
-
-	// Modelos de espectadores (A a F)
-	Model espectador_A((char*)"modelos/espectador/espectador_A.obj");
-	Model espectador_B((char*)"modelos/espectador/espectador_B.obj");
-	Model espectador_C((char*)"modelos/espectador/espectador_C.obj");
-	Model espectador_D((char*)"modelos/espectador/espectador_D.obj");
-	Model espectador_E((char*)"modelos/espectador/espectador_E.obj");
-	Model espectador_F((char*)"modelos/espectador/espectador_F.obj");
-
+	// Jugadores Celtics
+	std::cout << "[DEBUG] Cargando jugadores Celtics..." << std::endl;
+	Model celticsBrown((char*)"modelos/jugadores/Celtics/brown.obj");
+	Model celticsHoliday((char*)"modelos/jugadores/Celtics/holiday.obj");
+	Model celticsHorford((char*)"modelos/jugadores/Celtics/horford.obj");
 	Model celticsTatum((char*)"modelos/jugadores/Celtics/tatum.obj");
+	Model celticsWhite((char*)"modelos/jugadores/Celtics/white.obj");
+
+	// Jugadores Lakers
+	std::cout << "[DEBUG] Cargando Gasol..." << std::endl;
 	Model lakersGasol((char*)"modelos/jugadores/Lakers/gasol.obj");
 
+	std::cout << "[DEBUG] Cargando James..." << std::endl;
+	//Model lakersJames((char*)"modelos/jugadores/Lakers/james.obj");
+
+	std::cout << "[DEBUG] Cargando Davis..." << std::endl;
+	Model lakersDavis((char*)"modelos/jugadores/Lakers/lakers_davis.obj");
+
+	std::cout << "[DEBUG] Cargando West..." << std::endl;
+	Model lakersWest((char*)"modelos/jugadores/Lakers/lakers_west.obj");
+
+	std::cout << "[DEBUG] Cargando O'Neal..." << std::endl;
+	Model lakersOneal((char*)"modelos/jugadores/Lakers/oneal.obj");
+
+	Model balon(ResolveModel("modelos/balonBaloncesto/BalonBaloncesto5.obj"));
+	Model bancaConJugador1(ResolveModel("modelos/BancaConJugador/banca_jugador1.obj"));
+	Model bancaConJugador2(ResolveModel("modelos/BancaConJugador/banca_jugador2.obj"));
+	Model bancaMadera(ResolveModel("modelos/BancaMadera/banca.obj"));
+
+	// Modelos de espectadores
+	Model espectador_A(ResolveModel("modelos/espectador/espectador_A.obj"));
+	Model espectador_B(ResolveModel("modelos/espectador/espectador_B.obj"));
+	Model espectador_C(ResolveModel("modelos/espectador/espectador_C.obj"));
+	Model espectador_D(ResolveModel("modelos/espectador/espectador_D.obj"));
+	Model espectador_E(ResolveModel("modelos/espectador/espectador_E.obj"));
+	Model espectador_F(ResolveModel("modelos/espectador/espectador_F.obj"));
+
 	std::cout << "[DEBUG] ¡Todos los modelos cargados con éxito! Iniciando bucle principal..." << std::endl;
+
+	const bool DEBUG_MODELOS = true;
+	if (DEBUG_MODELOS)
+	{
+		auto info = [](const char* nombre, const Model& m) {
+			std::cout << "\n[INFO] " << nombre << std::endl;
+			m.PrintSummary();
+			m.PrintMaterials();
+			};
+		info("arbitro", arbitro);
+		info("gradas", gradas);
+		info("marcador", marcador);
+		info("barrera", barrera);
+		info("bocina", bocina);
+		info("camaraObj", camaraObj);
+		info("ceilingLights", ceilingLights);
+		info("silla", silla);
+		info("mesas", mesas);
+		info("balon", balon);
+		info("bancaMadera", bancaMadera);
+		info("espectador_A", espectador_A);
+		info("celticsTatum", celticsTatum);
+		info("lakersGasol", lakersGasol);
+		std::cout << std::endl;
+	}
 
 	// Configurar VAO y VBO para el suelo y lámparas
 	GLuint VBO, VAO;
@@ -207,10 +300,38 @@ int main()
 	glEnableVertexAttribArray(0);
 	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
 	glEnableVertexAttribArray(1);
+	glBindVertexArray(0);
 
 	lightingShader.Use();
 	glUniform1i(glGetUniformLocation(lightingShader.Program, "material.diffuse"), 0);
 	glUniform1i(glGetUniformLocation(lightingShader.Program, "material.specular"), 1);
+	glUniform1i(glGetUniformLocation(lightingShader.Program, "transparency"), 0);
+
+
+	// Luces puntuales
+	for (int i = 1; i < 4; i++)
+	{
+		std::string base = "pointLights[" + std::to_string(i) + "].";
+		SetVec3(lightingShader.Program, base + "position", 0.0f, 0.0f, 0.0f);
+		SetVec3(lightingShader.Program, base + "ambient", 0.0f, 0.0f, 0.0f);
+		SetVec3(lightingShader.Program, base + "diffuse", 0.0f, 0.0f, 0.0f);
+		SetVec3(lightingShader.Program, base + "specular", 0.0f, 0.0f, 0.0f);
+		SetFloat(lightingShader.Program, base + "constant", 1.0f);
+		SetFloat(lightingShader.Program, base + "linear", 0.09f);
+		SetFloat(lightingShader.Program, base + "quadratic", 0.032f);
+	}
+
+	// Spot light: apagada
+	SetVec3(lightingShader.Program, "spotLight.position", 0.0f, 6.0f, 0.0f);
+	SetVec3(lightingShader.Program, "spotLight.direction", 0.0f, -1.0f, 0.0f);
+	SetVec3(lightingShader.Program, "spotLight.ambient", 0.0f, 0.0f, 0.0f);
+	SetVec3(lightingShader.Program, "spotLight.diffuse", 0.0f, 0.0f, 0.0f);
+	SetVec3(lightingShader.Program, "spotLight.specular", 0.0f, 0.0f, 0.0f);
+	SetFloat(lightingShader.Program, "spotLight.constant", 1.0f);
+	SetFloat(lightingShader.Program, "spotLight.linear", 0.09f);
+	SetFloat(lightingShader.Program, "spotLight.quadratic", 0.032f);
+	SetFloat(lightingShader.Program, "spotLight.cutOff", glm::cos(glm::radians(12.5f)));
+	SetFloat(lightingShader.Program, "spotLight.outerCutOff", glm::cos(glm::radians(15.0f)));
 
 	glm::mat4 projection = glm::perspective(camera.GetZoom(), (GLfloat)SCREEN_WIDTH / (GLfloat)SCREEN_HEIGHT, 0.1f, 100.0f);
 
@@ -228,11 +349,15 @@ int main()
 		{ glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(1.0f, 0.0f, 0.0f), 0.0f }     // Sur (-Z)
 	};
 
-	const float BARRERA_DIST = 6.00f;
+
+	const float BARRERA_DIST = 10.00f;
 	const float BARRERA_PASO = 1.695f;
-	const float GRADAS_FRENTE = 11.5f;
+	const int   BARRERA_MITAD = 5;          // barreras por lado = 2 * BARRERA_MITAD + 1
+	const float GRADAS_FRENTE = 15.5f;
 	const float GRADAS_SECCION = 3.36f;
-	const float MARCADOR_ALTURA = 8.60f;
+	const float MARCADOR_ESCALA = 0.85f;
+
+	const float ESPECTADOR_GIRO = 0.0f;
 
 	// Parámetros geométricos de las gradas para posicionar al público
 	const float GRADAS_BORDE[6] = { -14.0f, -9.28f, -4.56f, 0.15f, 4.87f, 9.59f };
@@ -243,6 +368,91 @@ int main()
 	const float PASO = 0.62f * UNIDADES_POR_M;
 	const int POR_FILA = 9;
 	const float OCUPACION_GRADAS = 0.70f;
+
+	const float SUELO_Y = 0.05f;
+
+	const float BALON_X = 0.0f, BALON_Z = 0.0f;
+	const float BALON_ESCALA = 0.2f;
+
+	const float BOCINA_DIST = 12.0f;
+	const float BOCINA_ESCALA = 1.0f / 3.0f;
+	const float BOCINA_GIRO = 180.0f;
+
+	const float MESAS_DIST = 8.0f;
+	const float MESAS_Z = 0.0f;
+	const int   SILLAS_CANTIDAD = 3;
+	const float SILLA_ESCALA = 0.46f / 163.0f;
+	const float SILLA_PASO = 1.0f;
+	const float SILLA_SEPARACION = 0.6f;
+	const float SILLA_GIRO = 90.0f;
+
+	const float BANCAS_DIST = 8.0f;
+	const float BANCAS_SEPARACION = 0.8f;
+	const float BANCA_JUGADOR_GIRO = 0.0f;
+
+	auto yawAlineado = [](const Model& m) {
+		glm::vec3 sz = m.GetSize();
+		return sz.x >= sz.z ? 90.0f : 0.0f;
+		};
+	auto largoAlineado = [](const Model& m) {
+		glm::vec3 sz = m.GetSize();
+		return sz.x >= sz.z ? sz.x : sz.z;
+		};
+	auto fondoAlineado = [](const Model& m) {
+		glm::vec3 sz = m.GetSize();
+		return sz.x >= sz.z ? sz.z : sz.x;
+		};
+
+	const float yawMesas = yawAlineado(mesas);
+	const float fondoMesas = fondoAlineado(mesas);
+	const float sillasX = -MESAS_DIST - fondoMesas * 0.5f - SILLA_SEPARACION;
+	const float sillasYaw = glm::degrees(std::atan2(1.0f, 0.0f)) + SILLA_GIRO;
+
+	struct Banca { Model* m; float z; float yaw; };
+	std::vector<Banca> bancasFila;
+	{
+		Model* lista[3] = { &bancaMadera, &bancaConJugador1, &bancaConJugador2 };
+		float giros[3] = { 0.0f, BANCA_JUGADOR_GIRO, BANCA_JUGADOR_GIRO };
+		float total = 0.0f;
+		int n = 0;
+		for (int i = 0; i < 3; i++)
+		{
+			float largo = largoAlineado(*lista[i]);
+			if (largo <= 0.001f) continue;
+			total += largo;
+			n++;
+		}
+		if (n > 1) total += BANCAS_SEPARACION * (n - 1);
+		float z = -total * 0.5f;
+		for (int i = 0; i < 3; i++)
+		{
+			float largo = largoAlineado(*lista[i]);
+			if (largo <= 0.001f) continue;
+			bancasFila.push_back({ lista[i], z + largo * 0.5f, yawAlineado(*lista[i]) + giros[i] });
+			z += largo + BANCAS_SEPARACION;
+		}
+	}
+
+	const float JUGADOR_ESCALA = 1.0f;
+	const float JUGADOR_GIRO = 0.0f;
+
+	struct Jugador { Model* m; float x; float z; float yaw; };
+	std::vector<Jugador> jugadores;
+	{
+		const float yawCeltics = 90.0f + JUGADOR_GIRO;
+		const float yawLakers = -90.0f + JUGADOR_GIRO;
+
+		jugadores.push_back({ &celticsTatum,   -1.6f,  0.0f, yawCeltics });
+		jugadores.push_back({ &celticsBrown,   -3.2f, -3.0f, yawCeltics });
+		jugadores.push_back({ &celticsHoliday, -3.2f,  3.0f, yawCeltics });
+		jugadores.push_back({ &celticsHorford, -5.2f, -1.2f, yawCeltics });
+		jugadores.push_back({ &celticsWhite,   -5.2f,  1.8f, yawCeltics });
+
+		jugadores.push_back({ &lakersGasol,  1.6f,  0.0f, yawLakers });
+		jugadores.push_back({ &lakersDavis,  3.2f, -3.0f, yawLakers });
+		jugadores.push_back({ &lakersWest,   3.2f,  3.0f, yawLakers });
+		jugadores.push_back({ &lakersOneal,  5.2f,  0.6f, yawLakers });
+	}
 
 	// Bucle principal
 	while (!glfwWindowShouldClose(window))
@@ -294,25 +504,40 @@ int main()
 
 		glm::mat4 model(1);
 
-		// ==========================================================
-		// 1. PLANO DE SUELO (44 x 44 m)
-		// ==========================================================
+		auto dibujarSobreSuelo = [&](Model& m, float x, float z, float yawDeg, float s) {
+			glm::vec3 mn = m.GetBoundsMin(), mx = m.GetBoundsMax();
+			glm::vec3 c = (mn + mx) * 0.5f;
+			glm::mat4 mm(1.0f);
+			mm = glm::translate(mm, glm::vec3(x, SUELO_Y, z));
+			mm = glm::rotate(mm, glm::radians(yawDeg), glm::vec3(0.0f, 1.0f, 0.0f));
+			mm = glm::scale(mm, glm::vec3(s));
+			mm = glm::translate(mm, glm::vec3(-c.x, -mn.y, -c.z));
+			glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(mm));
+			m.Draw(lightingShader);
+			};
+
+		// Plano del suelo
 		model = glm::mat4(1.0f);
 		model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.0f));
-		model = glm::scale(model, glm::vec3(44.0f, 0.1f, 44.0f));
+		model = glm::scale(model, glm::vec3(52.0f, 0.1f, 52.0f));
 		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+
+		glVertexAttrib3f(3, 1.0f, 1.0f, 1.0f);
+		glVertexAttrib2f(2, 0.0f, 0.0f);
 
 		GLint diffuseColorLoc = glGetUniformLocation(lightingShader.Program, "material.diffuseColor");
 		GLint hasDiffMapLoc = glGetUniformLocation(lightingShader.Program, "material.hasDiffuseMap");
 		glUniform3f(diffuseColorLoc, 0.11f, 0.11f, 0.13f);
 		glUniform1i(hasDiffMapLoc, 0);
+		glUniform1i(glGetUniformLocation(lightingShader.Program, "material.hasSpecularMap"), 0);
+		glUniform3f(glGetUniformLocation(lightingShader.Program, "material.specularColor"), 0.2f, 0.2f, 0.2f);
+		glUniform3f(glGetUniformLocation(lightingShader.Program, "material.emissive"), 0.0f, 0.0f, 0.0f);
+		glUniform1f(glGetUniformLocation(lightingShader.Program, "material.opacity"), 1.0f);
+		glUniform1i(glGetUniformLocation(lightingShader.Program, "material.alphaTest"), 0);
 
 		glBindVertexArray(VAO);
 		glDrawArrays(GL_TRIANGLES, 0, 36);
-
-		// ==========================================================
-		// 2. DIBUJAR MODELOS 3D DEL ESCENARIO
-		// ==========================================================
+		glBindVertexArray(0);
 
 		// A. ÁRBITRO Y JUGADORES (Cerca del centro)
 		model = glm::mat4(1.0f);
@@ -321,55 +546,27 @@ int main()
 		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
 		arbitro.Draw(lightingShader);
 
-		model = glm::mat4(1.0f);
-		model = glm::translate(model, glm::vec3(-1.4f, 0.0f, 0.0f));
-		model = glm::scale(model, glm::vec3(1.0f));
-		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
-		celticsTatum.Draw(lightingShader);
-
-		model = glm::mat4(1.0f);
-		model = glm::translate(model, glm::vec3(1.4f, 0.0f, 0.0f));
-		model = glm::scale(model, glm::vec3(1.0f));
-		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
-		lakersGasol.Draw(lightingShader);
+		for (const Jugador& j : jugadores)
+			dibujarSobreSuelo(*j.m, j.x, j.z, j.yaw, JUGADOR_ESCALA);
 
 		// B. BALÓN DE BALONCESTO (Al centro de la cancha)
-		model = glm::mat4(1.0f);
-		model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.0f));
-		model = glm::scale(model, glm::vec3(0.5f));
-		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
-		balon.Draw(lightingShader);
+		dibujarSobreSuelo(balon, BALON_X, BALON_Z, 0.0f, BALON_ESCALA);
 
 		// C. MARCADOR ELECTRÓNICO (Suspendido al centro del techo)
 		model = glm::mat4(1.0f);
-		model = glm::translate(model, glm::vec3(0.0f, MARCADOR_ALTURA, 0.0f));
-		model = glm::scale(model, glm::vec3(1.0f / 3.0f));
+		model = glm::translate(model, glm::vec3(3.0f, 10.0f, 0.0f));
+		model = glm::scale(model, glm::vec3(MARCADOR_ESCALA));
 		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
 		marcador.Draw(lightingShader);
 
 		// D. BANCAS DE EQUIPOS Y MADERA
-		model = glm::mat4(1.0f);
-		model = glm::translate(model, glm::vec3(-5.5f, 0.0f, -3.0f));
-		model = glm::scale(model, glm::vec3(1.0f));
-		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
-		bancaConJugador1.Draw(lightingShader);
-
-		model = glm::mat4(1.0f);
-		model = glm::translate(model, glm::vec3(-5.5f, 0.0f, -5.0f));
-		model = glm::scale(model, glm::vec3(1.0f));
-		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
-		bancaConJugador2.Draw(lightingShader);
-
-		model = glm::mat4(1.0f);
-		model = glm::translate(model, glm::vec3(5.5f, 0.0f, -3.0f));
-		model = glm::scale(model, glm::vec3(1.0f));
-		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
-		bancaMadera.Draw(lightingShader);
+		for (const Banca& bk : bancasFila)
+			dibujarSobreSuelo(*bk.m, BANCAS_DIST, bk.z, bk.yaw, 1.0f);
 
 		// E. BARRERAS DE PROTECCIÓN
 		for (int i = 0; i < 4; i++)
 		{
-			for (int k = -3; k <= 3; k++)
+			for (int k = -BARRERA_MITAD; k <= BARRERA_MITAD; k++)
 			{
 				float t = k * BARRERA_PASO;
 				glm::vec3 p = arenaSides[i].n * BARRERA_DIST + arenaSides[i].t * t;
@@ -414,7 +611,7 @@ int main()
 
 						glm::mat4 specModel = glm::mat4(1.0f);
 						specModel = glm::translate(specModel, worldSeatPos);
-						specModel = glm::rotate(specModel, glm::radians(arenaSides[i].yawToRing + 180.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+						specModel = glm::rotate(specModel, glm::radians(arenaSides[i].yawToRing + ESPECTADOR_GIRO), glm::vec3(0.0f, 1.0f, 0.0f));
 						specModel = glm::scale(specModel, glm::vec3(1.0f));
 
 						glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(specModel));
@@ -425,54 +622,47 @@ int main()
 			}
 		}
 
-		// G. MESAS, SILLAS Y ACCESORIOS (Lado -X)
-		model = glm::mat4(1.0f);
-		model = glm::translate(model, glm::vec3(-4.5f, 0.0f, 0.0f));
-		model = glm::scale(model, glm::vec3(1.0f));
-		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
-		mesas.Draw(lightingShader);
-
-		model = glm::mat4(1.0f);
-		model = glm::translate(model, glm::vec3(-5.0f, 0.0f, -1.0f));
-		model = glm::scale(model, glm::vec3(0.46f / 163.0f));
-		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
-		silla.Draw(lightingShader);
+		// G. MESAS Y SILLAS
+		dibujarSobreSuelo(mesas, -MESAS_DIST, MESAS_Z, yawMesas, 1.0f);
+		for (int i = 0; i < SILLAS_CANTIDAD; i++)
+		{
+			float sz = MESAS_Z + (i - (SILLAS_CANTIDAD - 1) * 0.5f) * SILLA_PASO;
+			dibujarSobreSuelo(silla, sillasX, sz, sillasYaw, SILLA_ESCALA);
+		}
 
 		// H. BOCINAS Y CÁMARAS DE TRANSMISIÓN
-		model = glm::mat4(1.0f);
-		model = glm::translate(model, glm::vec3(-7.6f, 0.0f, 7.6f));
-		model = glm::scale(model, glm::vec3(1.0f / 3.0f));
-		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
-		bocina.Draw(lightingShader);
+		for (int sx = -1; sx <= 1; sx += 2)
+		{
+			for (int sz = -1; sz <= 1; sz += 2)
+			{
+				float bx = sx * BOCINA_DIST;
+				float bz = sz * BOCINA_DIST;
+				float yaw = glm::degrees(std::atan2(-bx, -bz)) + BOCINA_GIRO;
+				dibujarSobreSuelo(bocina, bx, bz, yaw, BOCINA_ESCALA);
+			}
+		}
 
 		model = glm::mat4(1.0f);
-		model = glm::translate(model, glm::vec3(0.0f, 0.0f, 4.8f));
+		model = glm::translate(model, glm::vec3(0.0f, 0.0f, 9.0f));
 		model = glm::scale(model, glm::vec3(0.01f));
 		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
 		camaraObj.Draw(lightingShader);
 
 		model = glm::mat4(1.0f);
-		model = glm::translate(model, glm::vec3(4.6f, 0.0f, 4.6f));
+		model = glm::translate(model, glm::vec3(7.0f, 0.0f, 7.0f));
 		model = glm::scale(model, glm::vec3(1.0f));
 		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
 		camaraBroadcast.Draw(lightingShader);
 
-		// I. ILUMINACIÓN DE TECHO Y BANDERA
+		// Iluminación de techo
 		model = glm::mat4(1.0f);
 		model = glm::translate(model, glm::vec3(0.0f, 7.0f, 0.0f));
 		model = glm::scale(model, glm::vec3(0.02f));
 		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
 		ceilingLights.Draw(lightingShader);
 
-		model = glm::mat4(1.0f);
-		model = glm::translate(model, glm::vec3(0.0f, 6.0f, 13.0f));
-		model = glm::scale(model, glm::vec3(0.005f));
-		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
-		mexicanFlag.Draw(lightingShader);
 
-		// ==========================================================
-		// 3. RENDERIZAR LA LÁMPARA VISIBLE
-		// ==========================================================
+
 		lampShader.Use();
 		modelLoc = glGetUniformLocation(lampShader.Program, "model");
 		viewLoc = glGetUniformLocation(lampShader.Program, "view");

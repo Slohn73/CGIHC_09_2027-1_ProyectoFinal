@@ -52,6 +52,7 @@ struct SpotLight
 in vec3 FragPos;
 in vec3 Normal;
 in vec2 TexCoords;
+in vec3 VertexColor; // Recibe el color por vértice del Vertex Shader
 
 out vec4 color;
 
@@ -62,16 +63,16 @@ uniform SpotLight spotLight;
 uniform Material material;
 uniform int transparency;
 
-// Prototipe de funciones
+// Prototipo de funciones
 vec3 CalcDirLight(DirLight light, vec3 normal, vec3 viewDir, vec3 baseColor, vec3 specColor);
 vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir, vec3 baseColor, vec3 specColor);
 vec3 CalcSpotLight(SpotLight light, vec3 normal, vec3 fragPos, vec3 viewDir, vec3 baseColor, vec3 specColor);
 
 void main()
 {
-    // Obtener el color base (Textura si existe, o Color Diffuse del material)
+    // Obtener el color base multiplicando el color por vértice enviado desde Mesh.h
     vec4 texColor = material.hasDiffuseMap ? texture(material.diffuse, TexCoords) : vec4(1.0);
-    vec3 baseColor = texColor.rgb * material.diffuseColor;
+    vec3 baseColor = texColor.rgb * material.diffuseColor * VertexColor;
     
     // Obtener el color especular
     vec3 specColor = material.hasSpecularMap ? texture(material.specular, TexCoords).rgb : material.specularColor;
@@ -98,13 +99,13 @@ void main()
     // Luz Spot
     result += CalcSpotLight(spotLight, norm, FragPos, viewDir, baseColor, specColor);
 
-    // Agregar Emisivo (materiales encendidos)
+    // Agregar Emisivo
     result += material.emissive;
 
     color = vec4(result, alpha);
 }
 
-// Calculo de Luz Direccional
+// Cálculo de Luz Direccional
 vec3 CalcDirLight(DirLight light, vec3 normal, vec3 viewDir, vec3 baseColor, vec3 specColor)
 {
     vec3 lightDir = normalize(-light.direction);
@@ -123,7 +124,7 @@ vec3 CalcDirLight(DirLight light, vec3 normal, vec3 viewDir, vec3 baseColor, vec
     return (ambient + diffuse + specular);
 }
 
-// Calculo de Luz Puntual
+// Cálculo de Luz Puntual
 vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir, vec3 baseColor, vec3 specColor)
 {
     vec3 lightDir = normalize(light.position - fragPos);
@@ -146,7 +147,7 @@ vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir, v
     return (ambient + diffuse + specular);
 }
 
-// Calculo de Luz Spot
+// Cálculo de Luz Spot
 vec3 CalcSpotLight(SpotLight light, vec3 normal, vec3 fragPos, vec3 viewDir, vec3 baseColor, vec3 specColor)
 {
     vec3 lightDir = normalize(light.position - fragPos);
