@@ -248,8 +248,8 @@ int main()
 	Model lakersOneal((char*)"modelos/jugadores/Lakers/oneal.obj");
 
 	Model balon(ResolveModel("modelos/balonBaloncesto/BalonBaloncesto5.obj"));
-	Model bancaConJugador1(ResolveModel("modelos/BancaConJugador/banca_jugador1.obj"));
-	Model bancaConJugador2(ResolveModel("modelos/BancaConJugador/banca_jugador2.obj"));
+	Model bancaConJugador1(ResolveModel("modelos/BancaConJugador/banca_jugador1/bancaConJugador1.fbx"));
+	Model bancaConJugador2(ResolveModel("modelos/BancaConJugador/banca_jugador2/bancaConJugador2.fbx"));
 	Model bancaMadera(ResolveModel("modelos/BancaMadera/banca.obj"));
 
 	// Modelos de espectadores
