@@ -172,7 +172,7 @@ static std::string ResolveModel(const std::string& path)
 		}
 	}
 	if (!any)
-		std::cout << "             (no hay ningun archivo de modelo en esa carpeta)" << std::endl;
+		std::cout << "    (no hay ningun archivo de modelo en esa carpeta)" << std::endl;
 	return path;
 }
 
@@ -210,9 +210,10 @@ int main()
 	Shader lightingShader("Shaders/lighting.vs", "Shaders/lighting.frag");
 	Shader lampShader("Shaders/lamp.vs", "Shaders/lamp.frag");
 
-	// --- Carga de modelos con rutas corregidas ---
-	std::cout << "[DEBUG] Cargando modelos del escenario y nuevos elementos..." << std::endl;
-	Model arbitro(ResolveModel("modelos/arbitro-ruper-design/source/manga ralgla_cuello en v.fbx"));
+	// Carga de modelos
+	std::cout << "[DEBUG] Cargando modelos del escenario..." << std::endl;
+	Model cancha(ResolveModel("modelos/cancha/canchaBasquet.obj"));
+	//Model arbitro(ResolveModel("modelos/arbitro-ruper-design/source/manga ralgla_cuello en v.fbx"));
 	Model gradas(ResolveModel("modelos/Gradas/Gradas.obj"));
 	Model marcador(ResolveModel("modelos/marcador/marcadorBueno.obj"));
 	Model barrera(ResolveModel("modelos/barrera/barrera.obj"));
@@ -223,29 +224,13 @@ int main()
 	Model mesas(ResolveModel("modelos/mesas/scene.gltf"));
 	Model camaraBroadcast(ResolveModel("modelos/set-of-four-4-low-poly-cameras/source/camara_broadcast.obj"));
 
+	std::cout << "[DEBUG] Cargando jugadores..." << std::endl;
 	// Jugadores Celtics
-	std::cout << "[DEBUG] Cargando jugadores Celtics..." << std::endl;
-	Model celticsBrown((char*)"modelos/jugadores/Celtics/brown.obj");
-	Model celticsHoliday((char*)"modelos/jugadores/Celtics/holiday.obj");
-	Model celticsHorford((char*)"modelos/jugadores/Celtics/horford.obj");
-	Model celticsTatum((char*)"modelos/jugadores/Celtics/tatum.obj");
-	Model celticsWhite((char*)"modelos/jugadores/Celtics/white.obj");
+
+
 
 	// Jugadores Lakers
-	std::cout << "[DEBUG] Cargando Gasol..." << std::endl;
-	Model lakersGasol((char*)"modelos/jugadores/Lakers/gasol.obj");
 
-	std::cout << "[DEBUG] Cargando James..." << std::endl;
-	//Model lakersJames((char*)"modelos/jugadores/Lakers/james.obj");
-
-	std::cout << "[DEBUG] Cargando Davis..." << std::endl;
-	Model lakersDavis((char*)"modelos/jugadores/Lakers/lakers_davis.obj");
-
-	std::cout << "[DEBUG] Cargando West..." << std::endl;
-	Model lakersWest((char*)"modelos/jugadores/Lakers/lakers_west.obj");
-
-	std::cout << "[DEBUG] Cargando O'Neal..." << std::endl;
-	Model lakersOneal((char*)"modelos/jugadores/Lakers/oneal.obj");
 
 	Model balon(ResolveModel("modelos/balonBaloncesto/BalonBaloncesto5.obj"));
 	Model bancaConJugador1(ResolveModel("modelos/BancaConJugador/banca_jugador1/bancaConJugador1.fbx"));
@@ -262,32 +247,6 @@ int main()
 	Model espectador_F(ResolveModel("modelos/espectador/espectador_F.obj"));
 
 	std::cout << "[DEBUG] ¡Todos los modelos cargados con éxito! Iniciando bucle principal..." << std::endl;
-
-	const bool DEBUG_MODELOS = true;
-	if (DEBUG_MODELOS)
-	{
-		auto info = [](const char* nombre, const Model& m) {
-			std::cout << "\n[INFO] " << nombre << std::endl;
-			m.PrintSummary();
-			m.PrintMaterials();
-			};
-		info("arbitro", arbitro);
-		info("gradas", gradas);
-		info("marcador", marcador);
-		info("barrera", barrera);
-		info("bocina", bocina);
-		info("camaraObj", camaraObj);
-		info("ceilingLights", ceilingLights);
-		info("silla", silla);
-		info("mesas", mesas);
-		info("balon", balon);
-		info("bancaMadera", bancaMadera);
-		info("espectador_A", espectador_A);
-		info("cuarto", cuarto);
-		info("celticsTatum", celticsTatum);
-		info("lakersGasol", lakersGasol);
-		std::cout << std::endl;
-	}
 
 	// Configurar VAO y VBO para el suelo y lámparas
 	GLuint VBO, VAO;
@@ -352,9 +311,9 @@ int main()
 	};
 
 
-	const float BARRERA_DIST = 10.00f;
+	const float BARRERA_DIST = 12.0f;
 	const float BARRERA_PASO = 1.695f;
-	const int   BARRERA_MITAD = 5;          // barreras por lado = 2 * BARRERA_MITAD + 1
+	const int   BARRERA_MITAD = 6;          // barreras por lado = 2 * BARRERA_MITAD + 1
 	const float GRADAS_FRENTE = 15.5f;
 	const float GRADAS_SECCION = 3.36f;
 	const float MARCADOR_ESCALA = 0.85f;
@@ -376,24 +335,24 @@ int main()
 	const float BALON_X = 0.0f, BALON_Z = 0.0f;
 	const float BALON_ESCALA = 0.2f;
 
-	const float BOCINA_DIST = 12.0f;
-	const float BOCINA_ESCALA = 1.0f / 3.0f;
+	const float BOCINA_DIST = 13.0f;
+	const float BOCINA_ESCALA = 0.6f;
 	const float BOCINA_GIRO = 180.0f;
 
-	const float MESAS_DIST = 8.0f;
+	const float MESAS_DIST = 9.0f;
 	const float MESAS_Z = 0.0f;
 	const int   SILLAS_CANTIDAD = 3;
 	const float SILLA_ESCALA = 0.46f / 163.0f;
 	const float SILLA_PASO = 1.0f;
 	const float SILLA_SEPARACION = 0.6f;
-	const float SILLA_GIRO = 90.0f;
+	const float SILLA_GIRO = 180.0f;
 
-	const float BANCAS_DIST = 8.0f;
-	const float BANCAS_SEPARACION = 0.8f;
+	const float BANCAS_DIST = 7.5f;
+	const float BANCAS_SEPARACION = 1.5f;
 	const float BANCA_JUGADOR_GIRO = 0.0f;
 
-	const float BANCA_MADERA_ESCALA = 1.0f;
-	const float BANCA_JUGADOR_ESCALA = 0.01f;
+	const float BANCA_MADERA_ESCALA = 0.1f;
+	const float BANCA_JUGADOR_ESCALA = 0.1f;
 
 	const float CUARTO_ESCALA_X = 1.0f;
 	const float CUARTO_ESCALA_Y = 0.8f;
@@ -445,26 +404,7 @@ int main()
 		}
 	}
 
-	const float JUGADOR_ESCALA = 1.0f;
-	const float JUGADOR_GIRO = 0.0f;
 
-	struct Jugador { Model* m; float x; float z; float yaw; };
-	std::vector<Jugador> jugadores;
-	{
-		const float yawCeltics = 90.0f + JUGADOR_GIRO;
-		const float yawLakers = -90.0f + JUGADOR_GIRO;
-
-		jugadores.push_back({ &celticsTatum,   -1.6f,  0.0f, yawCeltics });
-		jugadores.push_back({ &celticsBrown,   -3.2f, -3.0f, yawCeltics });
-		jugadores.push_back({ &celticsHoliday, -3.2f,  3.0f, yawCeltics });
-		jugadores.push_back({ &celticsHorford, -5.2f, -1.2f, yawCeltics });
-		jugadores.push_back({ &celticsWhite,   -5.2f,  1.8f, yawCeltics });
-
-		jugadores.push_back({ &lakersGasol,  1.6f,  0.0f, yawLakers });
-		jugadores.push_back({ &lakersDavis,  3.2f, -3.0f, yawLakers });
-		jugadores.push_back({ &lakersWest,   3.2f,  3.0f, yawLakers });
-		jugadores.push_back({ &lakersOneal,  5.2f,  0.6f, yawLakers });
-	}
 
 	// Bucle principal
 	while (!glfwWindowShouldClose(window))
@@ -576,41 +516,48 @@ int main()
 		glDrawArrays(GL_TRIANGLES, 0, 36);
 		glBindVertexArray(0);
 
-		// A. ÁRBITRO Y JUGADORES (Cerca del centro)
+		// CANCHA DE BASQUETBOL
+		model = glm::mat4(1.0f);
+		model = glm::translate(model, glm::vec3(0.0f, 0.06f, 0.0f));
+		model = glm::scale(model, glm::vec3(0.064f));
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+		glUniform1i(glGetUniformLocation(lightingShader.Program, "transparency"), 1);
+		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+		cancha.Draw(lightingShader);
+		glDisable(GL_BLEND);
+
+		// ÁRBITRO Y JUGADORES (Cerca del centro)
 		model = glm::mat4(1.0f);
 		model = glm::translate(model, glm::vec3(0.3f, 0.0f, -1.9f));
 		model = glm::scale(model, glm::vec3(0.01f));
 		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
-		arbitro.Draw(lightingShader);
-		
-		for (const Jugador& j : jugadores)
-			dibujarSobreSuelo(*j.m, j.x, j.z, j.yaw, JUGADOR_ESCALA);
+		//arbitro.Draw(lightingShader);
 
-		// B. BALÓN DE BALONCESTO (Al centro de la cancha)
+
+		// BALÓN DE BALONCESTO (Al centro de la cancha)
 		dibujarSobreSuelo(balon, BALON_X, BALON_Z, 0.0f, BALON_ESCALA);
 
-		// C. MARCADOR ELECTRÓNICO (Suspendido al centro del techo)
+		// MARCADOR ELECTRÓNICO (Suspendido al centro del techo)
 		model = glm::mat4(1.0f);
-		model = glm::translate(model, glm::vec3(3.0f, 10.0f, 0.0f));
+		model = glm::translate(model, glm::vec3(2.6f, 10.0f, -2.9f));
 		model = glm::scale(model, glm::vec3(MARCADOR_ESCALA));
 		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
 		marcador.Draw(lightingShader);
 
-		// D. BANCAS DE EQUIPOS Y MADERA
-		/*for (const Banca& bk : bancasFila)
-			dibujarSobreSuelo(*bk.m, BANCAS_DIST, bk.z, bk.yaw, 1.0f);*/
-
-		// D. BANCAS DE EQUIPOS Y MADERA
+		// BANCAS DE EQUIPOS Y MADERA
 		for (const Banca& bk : bancasFila)
 		{
 			float escala = (bk.m == &bancaMadera)
 				? BANCA_MADERA_ESCALA
 				: BANCA_JUGADOR_ESCALA;
 
-			dibujarSobreSuelo(*bk.m, BANCAS_DIST, bk.z, bk.yaw, escala);
+			dibujarSobreSuelo(*bk.m, BANCAS_DIST, bk.z, bk.yaw + 90.0f, escala);
+			dibujarSobreSuelo(*bk.m, -BANCAS_DIST, bk.z, bk.yaw - 90.0f, escala);
 		}
 
-		// E. BARRERAS DE PROTECCIÓN
+		// BARRERAS DE PROTECCIÓN
 		for (int i = 0; i < 4; i++)
 		{
 			for (int k = -BARRERA_MITAD; k <= BARRERA_MITAD; k++)
@@ -626,7 +573,7 @@ int main()
 			}
 		}
 
-		// F. GRADAS Y ESPECTADORES DISTRIBUIDOS EN LOS ASIENTOS
+		// GRADAS Y ESPECTADORES DISTRIBUIDOS EN LOS ASIENTOS
 		int sectionCount = 0;
 		for (int i = 0; i < 4; i++)
 		{
@@ -669,7 +616,7 @@ int main()
 			}
 		}
 
-		// G. MESAS Y SILLAS
+		// MESAS Y SILLAS
 		dibujarSobreSuelo(mesas, -MESAS_DIST, MESAS_Z, yawMesas, 1.0f);
 		for (int i = 0; i < SILLAS_CANTIDAD; i++)
 		{
@@ -677,7 +624,7 @@ int main()
 			dibujarSobreSuelo(silla, sillasX, sz, sillasYaw, SILLA_ESCALA);
 		}
 
-		// H. BOCINAS Y CÁMARAS DE TRANSMISIÓN
+		// BOCINAS Y CÁMARAS DE TRANSMISIÓN
 		for (int sx = -1; sx <= 1; sx += 2)
 		{
 			for (int sz = -1; sz <= 1; sz += 2)
@@ -690,13 +637,15 @@ int main()
 		}
 
 		model = glm::mat4(1.0f);
-		model = glm::translate(model, glm::vec3(0.0f, 0.0f, 9.0f));
+		model = glm::translate(model, glm::vec3(8.0f, 0.0f, 9.2f));
+		model = glm::rotate(model, glm::radians(40.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 		model = glm::scale(model, glm::vec3(0.01f));
 		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
 		camaraObj.Draw(lightingShader);
 
 		model = glm::mat4(1.0f);
-		model = glm::translate(model, glm::vec3(7.0f, 0.0f, 7.0f));
+		model = glm::translate(model, glm::vec3(9.0f, 0.0f, 4.0f));
+		model = glm::rotate(model, glm::radians(260.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 		model = glm::scale(model, glm::vec3(1.0f));
 		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
 		camaraBroadcast.Draw(lightingShader);
