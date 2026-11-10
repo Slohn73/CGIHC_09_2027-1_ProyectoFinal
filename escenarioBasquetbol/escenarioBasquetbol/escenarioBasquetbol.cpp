@@ -177,6 +177,138 @@ static std::string ResolveModel(const std::string& path)
 	return path;
 }
 
+enum ParteCuerpo {
+	TORSO, CABEZA, BICEP_DER, BICEP_IZQ, ANTEBRAZO_DER, ANTEBRAZO_IZQ,
+	MANO_DER, MANO_IZQ, MUSLO_DER, MUSLO_IZQ, PIE_DER, PIE_IZQ, PARTES_CUERPO
+};
+
+static const int PADRE_PARTE[PARTES_CUERPO] = {
+	-1, TORSO, TORSO, TORSO, BICEP_DER, BICEP_IZQ,
+	ANTEBRAZO_DER, ANTEBRAZO_IZQ, TORSO, TORSO, MUSLO_DER, MUSLO_IZQ
+};
+
+static const char* NOMBRE_PARTE[PARTES_CUERPO] = {
+	"Torso", "Cabeza", "BicepDer", "BicepIzq", "AntebrazoDer", "AntebrazoIzq",
+	"ManoDer", "ManoIzq", "MusloDer", "MusloIzq", "PieDer", "PieIzq"
+};
+
+struct Rig {
+	Model* modelo[PARTES_CUERPO];
+	glm::vec3 junta[PARTES_CUERPO];
+	glm::vec3 centro[PARTES_CUERPO];
+	glm::vec3 base;
+	float escala;
+};
+
+struct Pose {
+	float x[PARTES_CUERPO] = {};
+	float y[PARTES_CUERPO] = {};
+};
+
+struct Personaje {
+	const Rig* rig = nullptr;
+	glm::vec3 posicion = glm::vec3(0.0f);
+	float yaw = 0.0f;
+	Pose pose;
+	float amplitud = 0.0f;
+	float velocidad = 2.0f;
+	float fase = 0.0f;
+	glm::mat4 mundo[PARTES_CUERPO];
+	glm::mat4 cabeza = glm::mat4(1.0f);
+
+	glm::vec3 PosicionCabeza() const { return glm::vec3(cabeza[3]); }
+	glm::vec3 FrenteCabeza() const { return glm::normalize(glm::vec3(cabeza * glm::vec4(0.0f, 0.0f, 1.0f, 0.0f))); }
+	glm::vec3 ArribaCabeza() const { return glm::normalize(glm::vec3(cabeza * glm::vec4(0.0f, 1.0f, 0.0f, 0.0f))); }
+};
+
+static Rig CrearRig(Model* partes[PARTES_CUERPO], float alturaDeseada, const char* nombre)
+{
+	Rig r;
+	glm::vec3 mn[PARTES_CUERPO], mx[PARTES_CUERPO];
+	for (int i = 0; i < PARTES_CUERPO; i++)
+	{
+		r.modelo[i] = partes[i];
+		mn[i] = partes[i]->GetBoundsMin();
+		mx[i] = partes[i]->GetBoundsMax();
+		r.centro[i] = (mn[i] + mx[i]) * 0.5f;
+	}
+
+	glm::vec3 torsoArribaDcto(mx[TORSO].x, mx[TORSO].y, r.centro[TORSO].z);
+	glm::vec3 torsoArribaIzq(mn[TORSO].x, mx[TORSO].y, r.centro[TORSO].z);
+	glm::vec3 torsoAbajoDcto(mx[TORSO].x, mn[TORSO].y, r.centro[TORSO].z);
+	glm::vec3 torsoAbajoIzq(mn[TORSO].x, mn[TORSO].y, r.centro[TORSO].z);
+
+	r.junta[TORSO] = r.centro[TORSO];
+	r.junta[CABEZA] = glm::vec3(r.centro[CABEZA].x, mn[CABEZA].y, r.centro[CABEZA].z);
+
+	r.junta[BICEP_DER] = glm::vec3(mx[BICEP_DER].x, torsoArribaDcto.y, r.centro[BICEP_DER].z);
+	r.junta[ANTEBRAZO_DER] = glm::vec3(mx[ANTEBRAZO_DER].x, r.centro[BICEP_DER].y, r.centro[ANTEBRAZO_DER].z);
+	r.junta[MANO_DER] = glm::vec3(mx[MANO_DER].x, r.centro[ANTEBRAZO_DER].y, r.centro[MANO_DER].z);
+	r.junta[MUSLO_DER] = glm::vec3(mx[MUSLO_DER].x, torsoAbajoDcto.y, r.centro[MUSLO_DER].z);
+	r.junta[PIE_DER] = glm::vec3(mx[PIE_DER].x, mx[PIE_DER].y, r.centro[PIE_DER].z);
+
+	r.junta[BICEP_IZQ] = glm::vec3(mn[BICEP_IZQ].x, torsoArribaIzq.y, r.centro[BICEP_IZQ].z);
+	r.junta[ANTEBRAZO_IZQ] = glm::vec3(mn[ANTEBRAZO_IZQ].x, r.centro[BICEP_IZQ].y, r.centro[ANTEBRAZO_IZQ].z);
+	r.junta[MANO_IZQ] = glm::vec3(mn[MANO_IZQ].x, r.centro[ANTEBRAZO_IZQ].y, r.centro[MANO_IZQ].z);
+	r.junta[MUSLO_IZQ] = glm::vec3(mn[MUSLO_IZQ].x, torsoAbajoIzq.y, r.centro[MUSLO_IZQ].z);
+	r.junta[PIE_IZQ] = glm::vec3(mn[PIE_IZQ].x, mx[PIE_IZQ].y, r.centro[PIE_IZQ].z);
+
+	float piso = std::min(mn[PIE_DER].y, mn[PIE_IZQ].y);
+	float altura = mx[CABEZA].y - piso;
+	r.escala = altura > 0.001f ? alturaDeseada / altura : 1.0f;
+	r.base = glm::vec3(r.centro[TORSO].x, piso, r.centro[TORSO].z);
+
+	return r;
+}
+
+static void ActualizarPersonaje(Personaje& p, float t)
+{
+	const Rig& r = *p.rig;
+	const glm::mat4 I(1.0f);
+	const glm::vec3 ejeX(1.0f, 0.0f, 0.0f);
+	const glm::vec3 ejeY(0.0f, 1.0f, 0.0f);
+
+	float s = std::sin(t * p.velocidad + p.fase) * p.amplitud;
+	float animX[PARTES_CUERPO] = {};
+	animX[BICEP_DER] = 35.0f * s;
+	animX[BICEP_IZQ] = -35.0f * s;
+	animX[ANTEBRAZO_DER] = 15.0f * s;
+	animX[ANTEBRAZO_IZQ] = -15.0f * s;
+	animX[MUSLO_DER] = -30.0f * s;
+	animX[MUSLO_IZQ] = 30.0f * s;
+	animX[PIE_DER] = 10.0f * s;
+	animX[PIE_IZQ] = -10.0f * s;
+
+	glm::mat4 base = glm::translate(I, p.posicion);
+	base = glm::rotate(base, glm::radians(p.yaw), ejeY);
+	base = glm::scale(base, glm::vec3(r.escala));
+	base = glm::translate(base, -r.base);
+
+	for (int i = 0; i < PARTES_CUERPO; i++)
+	{
+		glm::mat4 rot = glm::rotate(I, glm::radians(p.pose.y[i]), ejeY)
+			* glm::rotate(I, glm::radians(p.pose.x[i] + animX[i]), ejeX);
+
+		if (i == TORSO)
+			p.mundo[i] = base * glm::translate(I, r.junta[TORSO]) * rot;
+		else
+			p.mundo[i] = p.mundo[PADRE_PARTE[i]] * glm::translate(I, r.junta[i] - r.junta[PADRE_PARTE[i]]) * rot;
+	}
+
+	p.cabeza = p.mundo[CABEZA] * glm::translate(I, r.centro[CABEZA] - r.junta[CABEZA]);
+}
+
+static void DibujarPersonaje(const Personaje& p, Shader& shader, GLint modelLoc)
+{
+	const Rig& r = *p.rig;
+	for (int i = 0; i < PARTES_CUERPO; i++)
+	{
+		glm::mat4 m = p.mundo[i] * glm::translate(glm::mat4(1.0f), -r.junta[i]);
+		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(m));
+		r.modelo[i]->Draw(shader);
+	}
+}
+
 int main()
 {
 	std::cout << "[DEBUG] Inicializando GLFW..." << std::endl;
@@ -214,7 +346,6 @@ int main()
 	// Carga de modelos
 	std::cout << "[DEBUG] Cargando modelos del escenario..." << std::endl;
 	Model cancha(ResolveModel("modelos/cancha/canchaBasquet.obj"));
-	//Model arbitro(ResolveModel("modelos/arbitro-ruper-design/source/manga ralgla_cuello en v.fbx"));
 	Model gradas(ResolveModel("modelos/Gradas/Gradas.obj"));
 	Model marcador(ResolveModel("modelos/marcador/marcadorBueno.obj"));
 	Model barrera(ResolveModel("modelos/barrera/barrera.obj"));
@@ -225,14 +356,52 @@ int main()
 	Model mesas(ResolveModel("modelos/mesas/scene.gltf"));
 	Model camaraBroadcast(ResolveModel("modelos/set-of-four-4-low-poly-cameras/source/camara_broadcast.obj"));
 	Model spotlight(ResolveModel("modelos/Spotlight/source/spotlight_simple_animado.fbx"));
-	std::cout << "[DEBUG] Cargando jugadores..." << std::endl;
-	// Jugadores Celtics
 
+	std::cout << "[DEBUG] Cargando personajes..." << std::endl;
 
+	// Árbitro
+	Model cabezaArbitro(ResolveModel("modelos/Player_Arbitro/Cabeza_Arbitro.obj"));
+	Model torsoArbitro(ResolveModel("modelos/Player_Arbitro/Torso_Arbitro.obj"));
+	Model bicepDerArbitro(ResolveModel("modelos/Player_Arbitro/BicepDer_Arbitro.obj"));
+	Model bicepIzqArbitro(ResolveModel("modelos/Player_Arbitro/BicepIzq_Arbitro.obj"));
+	Model antebrazoDerArbitro(ResolveModel("modelos/Player_Arbitro/AntebrazoDer_Arbitro.obj"));
+	Model antebrazoIzqArbitro(ResolveModel("modelos/Player_Arbitro/AntebrazoIzq_Arbitro.obj"));
+	Model manoDerArbitro(ResolveModel("modelos/Player_Arbitro/ManoDer_Arbitro.obj"));
+	Model manoIzqArbitro(ResolveModel("modelos/Player_Arbitro/ManoIzq_Arbitro.obj"));
+	Model musloDerArbitro(ResolveModel("modelos/Player_Arbitro/MusloDer_Arbitro.obj"));
+	Model musloIzqArbitro(ResolveModel("modelos/Player_Arbitro/MusloIzq_Arbitro.obj"));
+	Model pieDerArbitro(ResolveModel("modelos/Player_Arbitro/PieDer_Arbitro.obj"));
+	Model pieIzqArbitro(ResolveModel("modelos/Player_Arbitro/PieIzq_Arbitro.obj"));
 
 	// Jugadores Lakers
+	Model cabezaLakers(ResolveModel("modelos/Player_Lakers/Cabeza_Jugador.obj"));
+	Model torsoLakers(ResolveModel("modelos/Player_Lakers/Torso_Jugador.obj"));
+	Model bicepDerLakers(ResolveModel("modelos/Player_Lakers/BicepDer_Jugador.obj"));
+	Model bicepIzqLakers(ResolveModel("modelos/Player_Lakers/BicepIzq_Jugador.obj"));
+	Model antebrazoDerLakers(ResolveModel("modelos/Player_Lakers/AntebrazoDer_Jugador.obj"));
+	Model antebrazoIzqLakers(ResolveModel("modelos/Player_Lakers/AntebrazoIzq_Jugador.obj"));
+	Model manoDerLakers(ResolveModel("modelos/Player_Lakers/ManoDer_Jugador.obj"));
+	Model manoIzqLakers(ResolveModel("modelos/Player_Lakers/ManoIzq_Jugador.obj"));
+	Model musloDerLakers(ResolveModel("modelos/Player_Lakers/MusloDer_Jugador.obj"));
+	Model musloIzqLakers(ResolveModel("modelos/Player_Lakers/MusloIzq_Jugador.obj"));
+	Model pieDerLakers(ResolveModel("modelos/Player_Lakers/PieDer_Jugador.obj"));
+	Model pieIzqLakers(ResolveModel("modelos/Player_Lakers/PieIzq_Jugador.obj"));
 
+	// Jugadores Bulls
+	Model cabezaBulls(ResolveModel("modelos/Player_Bulls/Cabeza_Bulls.obj"));
+	Model torsoBulls(ResolveModel("modelos/Player_Bulls/Torso_Bulls.obj"));
+	Model bicepDerBulls(ResolveModel("modelos/Player_Bulls/BicepDer_Bulls.obj"));
+	Model bicepIzqBulls(ResolveModel("modelos/Player_Bulls/BicepIzq_Bulls.obj"));
+	Model antebrazoDerBulls(ResolveModel("modelos/Player_Bulls/AntebrazoDer_Bulls.obj"));
+	Model antebrazoIzqBulls(ResolveModel("modelos/Player_Bulls/AntebrazoIzq_Bulls.obj"));
+	Model manoDerBulls(ResolveModel("modelos/Player_Bulls/ManoDer_Bulls.obj"));
+	Model manoIzqBulls(ResolveModel("modelos/Player_Bulls/ManoIzq_Bulls.obj"));
+	Model musloDerBulls(ResolveModel("modelos/Player_Bulls/MusloDer_Bulls.obj"));
+	Model musloIzqBulls(ResolveModel("modelos/Player_Bulls/MusloIzq_Bulls.obj"));
+	Model pieDerBulls(ResolveModel("modelos/Player_Bulls/PieDer_Bulls.obj"));
+	Model pieIzqBulls(ResolveModel("modelos/Player_Bulls/PieIzq_Bulls.obj"));
 
+	// Extras
 	Model balon(ResolveModel("modelos/balonBaloncesto/BalonBaloncesto5.obj"));
 	Model bancaConJugador1(ResolveModel("modelos/BancaConJugador/banca_jugador1/bancaConJugador1.fbx"));
 	Model bancaConJugador2(ResolveModel("modelos/BancaConJugador/banca_jugador2/bancaConJugador2.fbx"));
@@ -350,7 +519,7 @@ int main()
 
 	const float BANCAS_DIST = 6.2f;
 	const float BANCAS_SEPARACION = 0.1f;
-	const float BANCA_JUGADOR_GIRO = 0.0f;
+
 
 	const float BANCA_MADERA_LARGO = 2.2f;
 	const float BANCA_JUGADOR_LARGO = 2.2f;
@@ -391,6 +560,74 @@ int main()
 	const float zBancaJugador = largoMesas * 0.5f + BANCAS_SEPARACION + BANCA_JUGADOR_LARGO * 0.5f;
 	const float zBancaMadera = -(largoMesas * 0.5f + BANCAS_SEPARACION + BANCA_MADERA_LARGO * 0.5f);
 
+	const float ALTURA_ARBITRO = 1.80f;
+	const float ALTURA_JUGADOR = 1.95f;
+	const float JUGADOR_GIRO = 0.0f;
+	const bool  ANIMAR_PERSONAJES = true;
+	const float PERSONAJES_AMPLITUD = 0.5f;
+	const int   JUGADOR_CAMARA_BULLS = 0;
+	const int   JUGADOR_CAMARA_LAKERS = 0;
+
+	Model* partesArbitro[PARTES_CUERPO] = {
+		&torsoArbitro, &cabezaArbitro, &bicepDerArbitro, &bicepIzqArbitro, &antebrazoDerArbitro, &antebrazoIzqArbitro,
+		&manoDerArbitro, &manoIzqArbitro, &musloDerArbitro, &musloIzqArbitro, &pieDerArbitro, &pieIzqArbitro };
+	Model* partesLakers[PARTES_CUERPO] = {
+		&torsoLakers, &cabezaLakers, &bicepDerLakers, &bicepIzqLakers, &antebrazoDerLakers, &antebrazoIzqLakers,
+		&manoDerLakers, &manoIzqLakers, &musloDerLakers, &musloIzqLakers, &pieDerLakers, &pieIzqLakers };
+	Model* partesBulls[PARTES_CUERPO] = {
+		&torsoBulls, &cabezaBulls, &bicepDerBulls, &bicepIzqBulls, &antebrazoDerBulls, &antebrazoIzqBulls,
+		&manoDerBulls, &manoIzqBulls, &musloDerBulls, &musloIzqBulls, &pieDerBulls, &pieIzqBulls };
+
+	const Rig rigArbitro = CrearRig(partesArbitro, ALTURA_ARBITRO, "Arbitro");
+	const Rig rigLakers = CrearRig(partesLakers, ALTURA_JUGADOR, "Lakers");
+	const Rig rigBulls = CrearRig(partesBulls, ALTURA_JUGADOR, "Bulls");
+
+	// Posiciones (X, Z) para los 5 jugadores dentro de la duela
+	const float posBulls[5][2] = {
+		{ 0.0f, -2.5f },  
+		{ -3.5f, -5.5f },  
+		{ 3.5f, -5.5f },  
+		{ -2.0f, -8.5f },  
+		{ 2.0f, -8.5f }   
+	};
+
+	const float posLakers[5][2] = {
+		{ 0.0f,  2.5f },  
+		{ 3.5f,  5.5f },  
+		{ -3.5f,  5.5f }, 
+		{ 2.0f,  8.5f },  
+		{ -2.0f,  8.5f }   
+	};
+
+	Personaje arbitroP;
+	Personaje bulls[5];
+	Personaje lakers[5];
+
+	arbitroP.rig = &rigArbitro;
+	arbitroP.posicion = glm::vec3(-2.0f, SUELO_Y, 0.0f);
+	arbitroP.yaw = 180.0f;
+	arbitroP.amplitud = ANIMAR_PERSONAJES ? PERSONAJES_AMPLITUD * 0.4f : 0.0f;
+
+	for (int i = 0; i < 5; i++)
+	{
+		bulls[i].rig = &rigBulls;
+		bulls[i].posicion = glm::vec3(posBulls[i][0], SUELO_Y, posBulls[i][1]);
+		bulls[i].yaw = 90.0f;
+		bulls[i].amplitud = ANIMAR_PERSONAJES ? PERSONAJES_AMPLITUD : 0.0f;
+		bulls[i].velocidad = 2.0f + 0.2f * i;
+		bulls[i].fase = 1.3f * i;
+
+		lakers[i].rig = &rigLakers;
+		lakers[i].posicion = glm::vec3(posLakers[i][0], SUELO_Y, posLakers[i][1]);
+		lakers[i].yaw = 270.0f;
+		lakers[i].amplitud = ANIMAR_PERSONAJES ? PERSONAJES_AMPLITUD : 0.0f;
+		lakers[i].velocidad = 2.0f + 0.2f * i;
+		lakers[i].fase = 0.9f * i + 0.5f;
+	}
+
+	Personaje* jugadorCamaraBulls = &bulls[JUGADOR_CAMARA_BULLS];
+	Personaje* jugadorCamaraLakers = &lakers[JUGADOR_CAMARA_LAKERS];
+
 	// Bucle principal
 	while (!glfwWindowShouldClose(window))
 	{
@@ -401,6 +638,13 @@ int main()
 		glfwPollEvents();
 		UserInputs();
 		Animation();
+
+		ActualizarPersonaje(arbitroP, currentFrame);
+		for (int i = 0; i < 5; i++)
+		{
+			ActualizarPersonaje(bulls[i], currentFrame);
+			ActualizarPersonaje(lakers[i], currentFrame);
+		}
 
 		glClearColor(0.15f, 0.2f, 0.25f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -514,12 +758,12 @@ int main()
 		glDisable(GL_BLEND);
 
 		// ÁRBITRO Y JUGADORES (Cerca del centro)
-		model = glm::mat4(1.0f);
-		model = glm::translate(model, glm::vec3(0.3f, 0.0f, -1.9f));
-		model = glm::scale(model, glm::vec3(0.01f));
-		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
-		//arbitro.Draw(lightingShader);
-
+		DibujarPersonaje(arbitroP, lightingShader, modelLoc);
+		for (int i = 0; i < 5; i++)
+		{
+			DibujarPersonaje(bulls[i], lightingShader, modelLoc);
+			DibujarPersonaje(lakers[i], lightingShader, modelLoc);
+		}
 
 		// BALÓN DE BALONCESTO (Al centro de la cancha)
 		dibujarSobreSuelo(balon, BALON_X, BALON_Z, 0.0f, BALON_ESCALA);
@@ -527,7 +771,7 @@ int main()
 		// MARCADOR ELECTRÓNICO
 		glm::mat4 marcadorModel(1.0f);
 		marcadorModel = glm::translate(marcadorModel, glm::vec3(2.6f, 10.0f, -2.9f));
-		marcadorModel = glm::scale(marcadorModel, glm::vec3(MARCADOR_ESCALA)); 
+		marcadorModel = glm::scale(marcadorModel, glm::vec3(MARCADOR_ESCALA));
 		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(marcadorModel));
 		marcador.Draw(lightingShader);
 
@@ -539,15 +783,15 @@ int main()
 		float ajusteLateral = 1.0f;
 
 		glm::vec3 esquinasLocales[] = {
-			glm::vec3(minB.x * margen, minB.y, maxB.z * margen - ajusteLateral), 
-			glm::vec3(minB.x* margen, minB.y, minB.z* margen),
-			glm::vec3(maxB.x * margen, minB.y, maxB.z * margen+ajusteLateral), 
-			glm::vec3(maxB.x* margen, minB.y, minB.z* margen) 
-		}; 
+			glm::vec3(minB.x * margen, minB.y, maxB.z * margen - ajusteLateral),
+			glm::vec3(minB.x * margen, minB.y, minB.z * margen),
+			glm::vec3(maxB.x * margen, minB.y, maxB.z * margen + ajusteLateral),
+			glm::vec3(maxB.x * margen, minB.y, minB.z * margen)
+		};
 
 		const float ESCALA_REFLECTOR_LOCAL = 0.05f;
 
-		for (int i = 0; i < 4; i++){
+		for (int i = 0; i < 4; i++) {
 			glm::mat4 spotModel = marcadorModel;
 			spotModel = glm::translate(spotModel, esquinasLocales[i]);
 
@@ -563,19 +807,19 @@ int main()
 		float espaciadoBancas = 3.2f;
 
 		// --- LADO IZQUIERDO 
-		dibujarSobreSuelo(bancaConJugador1, -BANCAS_DIST, (-2.0f * espaciadoBancas), yawAlineado(bancaConJugador1) + BANCA_JUGADOR_GIRO, escalaBancaJugador1);
-		dibujarSobreSuelo(bancaConJugador1, -BANCAS_DIST, (-1.0f * espaciadoBancas), yawAlineado(bancaConJugador1) + BANCA_JUGADOR_GIRO, escalaBancaJugador1);
-		dibujarSobreSuelo(bancaMadera, -BANCAS_DIST, (0.0f * espaciadoBancas), yawAlineado(bancaMadera), escalaBancaMadera); 
-		dibujarSobreSuelo(bancaConJugador1, -BANCAS_DIST, (1.0f * espaciadoBancas), yawAlineado(bancaConJugador1) + BANCA_JUGADOR_GIRO, escalaBancaJugador1);
-		dibujarSobreSuelo(bancaMadera, -BANCAS_DIST, (2.0f * espaciadoBancas), yawAlineado(bancaMadera), escalaBancaMadera); 
+		dibujarSobreSuelo(bancaConJugador1, -BANCAS_DIST, (-2.0f * espaciadoBancas), yawAlineado(bancaConJugador1), escalaBancaJugador1);
+		dibujarSobreSuelo(bancaConJugador1, -BANCAS_DIST, (-1.0f * espaciadoBancas), yawAlineado(bancaConJugador1), escalaBancaJugador1);
+		dibujarSobreSuelo(bancaMadera, -BANCAS_DIST, (0.0f * espaciadoBancas), yawAlineado(bancaMadera), escalaBancaMadera);
+		dibujarSobreSuelo(bancaConJugador1, -BANCAS_DIST, (1.0f * espaciadoBancas), yawAlineado(bancaConJugador1), escalaBancaJugador1);
+		dibujarSobreSuelo(bancaMadera, -BANCAS_DIST, (2.0f * espaciadoBancas), yawAlineado(bancaMadera), escalaBancaMadera);
 
 		// --- LADO DERECHO
-		float yawDerechaEquipo2 = yawAlineado(bancaConJugador2) + 180.0f + BANCA_JUGADOR_GIRO;
+		float yawDerechaEquipo2 = yawAlineado(bancaConJugador2) + 180.0f;
 		dibujarSobreSuelo(bancaConJugador2, BANCAS_DIST, (-2.0f * espaciadoBancas), yawDerechaEquipo2, escalaBancaJugador2);
 		dibujarSobreSuelo(bancaConJugador2, BANCAS_DIST, (-1.0f * espaciadoBancas), yawDerechaEquipo2, escalaBancaJugador2);
-		dibujarSobreSuelo(bancaMadera, BANCAS_DIST, (0.0f * espaciadoBancas), yawAlineado(bancaMadera), escalaBancaMadera); 
+		dibujarSobreSuelo(bancaMadera, BANCAS_DIST, (0.0f * espaciadoBancas), yawAlineado(bancaMadera), escalaBancaMadera);
 		dibujarSobreSuelo(bancaConJugador2, BANCAS_DIST, (1.0f * espaciadoBancas), yawDerechaEquipo2, escalaBancaJugador2);
-		dibujarSobreSuelo(bancaMadera, BANCAS_DIST, (2.0f * espaciadoBancas), yawAlineado(bancaMadera), escalaBancaMadera); 
+		dibujarSobreSuelo(bancaMadera, BANCAS_DIST, (2.0f * espaciadoBancas), yawAlineado(bancaMadera), escalaBancaMadera);
 
 		// BARRERAS DE PROTECCIÓN
 		for (int i = 0; i < 4; i++)
