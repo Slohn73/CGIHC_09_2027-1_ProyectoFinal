@@ -14,6 +14,7 @@
 #include <string>
 #include <cctype>
 #include <vector>
+#include <algorithm>
 #include <filesystem>
 
 // GLEW
@@ -246,7 +247,7 @@ int main()
 	Model espectador_E(ResolveModel("modelos/espectador/espectador_E.obj"));
 	Model espectador_F(ResolveModel("modelos/espectador/espectador_F.obj"));
 
-	std::cout << "[DEBUG] ¡Todos los modelos cargados con éxito! Iniciando bucle principal..." << std::endl;
+	std::cout << "[DEBUG] Modelos cargados exitosamente. Iniciando ciclo de renderizado..." << std::endl;
 
 	// Configurar VAO y VBO para el suelo y lámparas
 	GLuint VBO, VAO;
@@ -347,12 +348,12 @@ int main()
 	const float SILLA_SEPARACION = 0.6f;
 	const float SILLA_GIRO = 180.0f;
 
-	const float BANCAS_DIST = 7.5f;
-	const float BANCAS_SEPARACION = 1.5f;
+	const float BANCAS_DIST = 6.2f;
+	const float BANCAS_SEPARACION = 0.1f;
 	const float BANCA_JUGADOR_GIRO = 0.0f;
 
-	const float BANCA_MADERA_ESCALA = 0.1f;
-	const float BANCA_JUGADOR_ESCALA = 0.1f;
+	const float BANCA_MADERA_LARGO = 2.2f;
+	const float BANCA_JUGADOR_LARGO = 2.2f;
 
 	const float CUARTO_ESCALA_X = 1.0f;
 	const float CUARTO_ESCALA_Y = 0.8f;
@@ -379,32 +380,16 @@ int main()
 	const float sillasX = -MESAS_DIST - fondoMesas * 0.5f - SILLA_SEPARACION;
 	const float sillasYaw = glm::degrees(std::atan2(1.0f, 0.0f)) + SILLA_GIRO;
 
-	struct Banca { Model* m; float z; float yaw; };
-	std::vector<Banca> bancasFila;
-	{
-		Model* lista[3] = { &bancaMadera, &bancaConJugador1, &bancaConJugador2 };
-		float giros[3] = { 0.0f, BANCA_JUGADOR_GIRO, BANCA_JUGADOR_GIRO };
-		float total = 0.0f;
-		int n = 0;
-		for (int i = 0; i < 3; i++)
-		{
-			float largo = largoAlineado(*lista[i]);
-			if (largo <= 0.001f) continue;
-			total += largo;
-			n++;
-		}
-		if (n > 1) total += BANCAS_SEPARACION * (n - 1);
-		float z = -total * 0.5f;
-		for (int i = 0; i < 3; i++)
-		{
-			float largo = largoAlineado(*lista[i]);
-			if (largo <= 0.001f) continue;
-			bancasFila.push_back({ lista[i], z + largo * 0.5f, yawAlineado(*lista[i]) + giros[i] });
-			z += largo + BANCAS_SEPARACION;
-		}
-	}
+	auto escalaPorLargo = [&](const Model& m, float largoDeseado) {
+		return largoDeseado / std::max(largoAlineado(m), 0.001f);
+		};
+	const float escalaBancaMadera = escalaPorLargo(bancaMadera, BANCA_MADERA_LARGO);
+	const float escalaBancaJugador1 = escalaPorLargo(bancaConJugador1, BANCA_JUGADOR_LARGO);
+	const float escalaBancaJugador2 = escalaPorLargo(bancaConJugador2, BANCA_JUGADOR_LARGO);
 
-
+	const float largoMesas = largoAlineado(mesas);
+	const float zBancaJugador = largoMesas * 0.5f + BANCAS_SEPARACION + BANCA_JUGADOR_LARGO * 0.5f;
+	const float zBancaMadera = -(largoMesas * 0.5f + BANCAS_SEPARACION + BANCA_MADERA_LARGO * 0.5f);
 
 	// Bucle principal
 	while (!glfwWindowShouldClose(window))
@@ -547,15 +532,22 @@ int main()
 		marcador.Draw(lightingShader);
 
 		// BANCAS DE EQUIPOS Y MADERA
-		for (const Banca& bk : bancasFila)
-		{
-			float escala = (bk.m == &bancaMadera)
-				? BANCA_MADERA_ESCALA
-				: BANCA_JUGADOR_ESCALA;
+		float espaciadoBancas = 3.2f;
 
-			dibujarSobreSuelo(*bk.m, BANCAS_DIST, bk.z, bk.yaw + 90.0f, escala);
-			dibujarSobreSuelo(*bk.m, -BANCAS_DIST, bk.z, bk.yaw - 90.0f, escala);
-		}
+		// --- LADO IZQUIERDO 
+		dibujarSobreSuelo(bancaConJugador1, -BANCAS_DIST, (-2.0f * espaciadoBancas), yawAlineado(bancaConJugador1) + BANCA_JUGADOR_GIRO, escalaBancaJugador1);
+		dibujarSobreSuelo(bancaConJugador1, -BANCAS_DIST, (-1.0f * espaciadoBancas), yawAlineado(bancaConJugador1) + BANCA_JUGADOR_GIRO, escalaBancaJugador1);
+		dibujarSobreSuelo(bancaMadera, -BANCAS_DIST, (0.0f * espaciadoBancas), yawAlineado(bancaMadera), escalaBancaMadera); 
+		dibujarSobreSuelo(bancaConJugador1, -BANCAS_DIST, (1.0f * espaciadoBancas), yawAlineado(bancaConJugador1) + BANCA_JUGADOR_GIRO, escalaBancaJugador1);
+		dibujarSobreSuelo(bancaMadera, -BANCAS_DIST, (2.0f * espaciadoBancas), yawAlineado(bancaMadera), escalaBancaMadera); 
+
+		// --- LADO DERECHO
+		float yawDerechaEquipo2 = yawAlineado(bancaConJugador2) + 180.0f + BANCA_JUGADOR_GIRO;
+		dibujarSobreSuelo(bancaConJugador2, BANCAS_DIST, (-2.0f * espaciadoBancas), yawDerechaEquipo2, escalaBancaJugador2);
+		dibujarSobreSuelo(bancaConJugador2, BANCAS_DIST, (-1.0f * espaciadoBancas), yawDerechaEquipo2, escalaBancaJugador2);
+		dibujarSobreSuelo(bancaMadera, BANCAS_DIST, (0.0f * espaciadoBancas), yawAlineado(bancaMadera), escalaBancaMadera); 
+		dibujarSobreSuelo(bancaConJugador2, BANCAS_DIST, (1.0f * espaciadoBancas), yawDerechaEquipo2, escalaBancaJugador2);
+		dibujarSobreSuelo(bancaMadera, BANCAS_DIST, (2.0f * espaciadoBancas), yawAlineado(bancaMadera), escalaBancaMadera); 
 
 		// BARRERAS DE PROTECCIÓN
 		for (int i = 0; i < 4; i++)
@@ -617,7 +609,7 @@ int main()
 		}
 
 		// MESAS Y SILLAS
-		dibujarSobreSuelo(mesas, -MESAS_DIST, MESAS_Z, yawMesas, 1.0f);
+		dibujarSobreSuelo(mesas, -MESAS_DIST, MESAS_Z, yawMesas, 0.7f);
 		for (int i = 0; i < SILLAS_CANTIDAD; i++)
 		{
 			float sz = MESAS_Z + (i - (SILLAS_CANTIDAD - 1) * 0.5f) * SILLA_PASO;
@@ -645,17 +637,17 @@ int main()
 
 		model = glm::mat4(1.0f);
 		model = glm::translate(model, glm::vec3(9.0f, 0.0f, 4.0f));
-		model = glm::rotate(model, glm::radians(260.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+		model = glm::rotate(model, glm::radians(240.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 		model = glm::scale(model, glm::vec3(1.0f));
 		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
 		camaraBroadcast.Draw(lightingShader);
 
 		// Iluminación de techo
-		model = glm::mat4(1.0f);
+		/*model = glm::mat4(1.0f);
 		model = glm::translate(model, glm::vec3(0.0f, 7.0f, 0.0f));
 		model = glm::scale(model, glm::vec3(0.02f));
 		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
-		ceilingLights.Draw(lightingShader);
+		ceilingLights.Draw(lightingShader);*/
 
 
 
