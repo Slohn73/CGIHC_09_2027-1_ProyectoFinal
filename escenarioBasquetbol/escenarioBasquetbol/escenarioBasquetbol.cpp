@@ -224,7 +224,7 @@ int main()
 	Model silla(ResolveModel("modelos/silla_metalica/silla_metalica.fbx"));
 	Model mesas(ResolveModel("modelos/mesas/scene.gltf"));
 	Model camaraBroadcast(ResolveModel("modelos/set-of-four-4-low-poly-cameras/source/camara_broadcast.obj"));
-
+	Model spotlight(ResolveModel("modelos/Spotlight/source/spotlight_simple_animado.fbx"));
 	std::cout << "[DEBUG] Cargando jugadores..." << std::endl;
 	// Jugadores Celtics
 
@@ -524,12 +524,40 @@ int main()
 		// BALÓN DE BALONCESTO (Al centro de la cancha)
 		dibujarSobreSuelo(balon, BALON_X, BALON_Z, 0.0f, BALON_ESCALA);
 
-		// MARCADOR ELECTRÓNICO (Suspendido al centro del techo)
-		model = glm::mat4(1.0f);
-		model = glm::translate(model, glm::vec3(2.6f, 10.0f, -2.9f));
-		model = glm::scale(model, glm::vec3(MARCADOR_ESCALA));
-		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+		// MARCADOR ELECTRÓNICO
+		glm::mat4 marcadorModel(1.0f);
+		marcadorModel = glm::translate(marcadorModel, glm::vec3(2.6f, 10.0f, -2.9f));
+		marcadorModel = glm::scale(marcadorModel, glm::vec3(MARCADOR_ESCALA)); 
+		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(marcadorModel));
 		marcador.Draw(lightingShader);
+
+		//REFLECTORES EN VIGAS
+		glm::vec3 minB = marcador.GetBoundsMin();
+		glm::vec3 maxB = marcador.GetBoundsMax();
+
+		float margen = 0.8f;
+		float ajusteLateral = 1.0f;
+
+		glm::vec3 esquinasLocales[] = {
+			glm::vec3(minB.x * margen, minB.y, maxB.z * margen - ajusteLateral), 
+			glm::vec3(minB.x* margen, minB.y, minB.z* margen),
+			glm::vec3(maxB.x * margen, minB.y, maxB.z * margen+ajusteLateral), 
+			glm::vec3(maxB.x* margen, minB.y, minB.z* margen) 
+		}; 
+
+		const float ESCALA_REFLECTOR_LOCAL = 0.05f;
+
+		for (int i = 0; i < 4; i++){
+			glm::mat4 spotModel = marcadorModel;
+			spotModel = glm::translate(spotModel, esquinasLocales[i]);
+
+			float yawReflector = 45.0f + (i * 90.0f);
+			spotModel = glm::rotate(spotModel, glm::radians(yawReflector), glm::vec3(0.0f, 1.0f, 0.0f));
+			spotModel = glm::scale(spotModel, glm::vec3(ESCALA_REFLECTOR_LOCAL));
+
+			glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(spotModel));
+			spotlight.Draw(lightingShader);
+		}
 
 		// BANCAS DE EQUIPOS Y MADERA
 		float espaciadoBancas = 3.2f;
