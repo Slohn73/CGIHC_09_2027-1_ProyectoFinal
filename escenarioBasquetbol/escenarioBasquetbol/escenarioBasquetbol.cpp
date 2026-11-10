@@ -251,6 +251,7 @@ int main()
 	Model bancaConJugador1(ResolveModel("modelos/BancaConJugador/banca_jugador1/bancaConJugador1.fbx"));
 	Model bancaConJugador2(ResolveModel("modelos/BancaConJugador/banca_jugador2/bancaConJugador2.fbx"));
 	Model bancaMadera(ResolveModel("modelos/BancaMadera/banca.obj"));
+	Model cuarto(ResolveModel("modelos/cuarto/cuarto.obj"));
 
 	// Modelos de espectadores
 	Model espectador_A(ResolveModel("modelos/espectador/espectador_A.obj"));
@@ -282,6 +283,7 @@ int main()
 		info("balon", balon);
 		info("bancaMadera", bancaMadera);
 		info("espectador_A", espectador_A);
+		info("cuarto", cuarto);
 		info("celticsTatum", celticsTatum);
 		info("lakersGasol", lakersGasol);
 		std::cout << std::endl;
@@ -389,6 +391,16 @@ int main()
 	const float BANCAS_DIST = 8.0f;
 	const float BANCAS_SEPARACION = 0.8f;
 	const float BANCA_JUGADOR_GIRO = 0.0f;
+
+	const float BANCA_MADERA_ESCALA = 1.0f;
+	const float BANCA_JUGADOR_ESCALA = 0.01f;
+
+	const float CUARTO_ESCALA_X = 1.0f;
+	const float CUARTO_ESCALA_Y = 0.8f;
+	const float CUARTO_ESCALA_Z = 1.1f;
+
+	const float CUARTO_GIRO = 0.0f;
+	const float CUARTO_Y = -0.5f;
 
 	auto yawAlineado = [](const Model& m) {
 		glm::vec3 sz = m.GetSize();
@@ -516,6 +528,31 @@ int main()
 			m.Draw(lightingShader);
 			};
 
+		// ESTRUCTURA DEL CUARTO
+		glm::vec3 cuartoMin = cuarto.GetBoundsMin();
+		glm::vec3 cuartoMax = cuarto.GetBoundsMax();
+		glm::vec3 cuartoCentro = (cuartoMin + cuartoMax) * 0.5f;
+
+		glm::mat4 cuartoModel(1.0f);
+
+		cuartoModel = glm::translate(cuartoModel, glm::vec3(0.0f, CUARTO_Y, 0.0f));
+		cuartoModel = glm::rotate(cuartoModel, glm::radians(CUARTO_GIRO), glm::vec3(0.0f, 1.0f, 0.0f));
+
+		cuartoModel = glm::scale(cuartoModel, glm::vec3(
+			CUARTO_ESCALA_X,
+			CUARTO_ESCALA_Y,
+			CUARTO_ESCALA_Z
+		));
+
+		cuartoModel = glm::translate(cuartoModel, glm::vec3(
+			-cuartoCentro.x,
+			-cuartoMin.y,
+			-cuartoCentro.z
+		));
+
+		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(cuartoModel));
+		cuarto.Draw(lightingShader);
+
 		// Plano del suelo
 		model = glm::mat4(1.0f);
 		model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.0f));
@@ -545,7 +582,7 @@ int main()
 		model = glm::scale(model, glm::vec3(0.01f));
 		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
 		arbitro.Draw(lightingShader);
-
+		
 		for (const Jugador& j : jugadores)
 			dibujarSobreSuelo(*j.m, j.x, j.z, j.yaw, JUGADOR_ESCALA);
 
@@ -560,8 +597,18 @@ int main()
 		marcador.Draw(lightingShader);
 
 		// D. BANCAS DE EQUIPOS Y MADERA
+		/*for (const Banca& bk : bancasFila)
+			dibujarSobreSuelo(*bk.m, BANCAS_DIST, bk.z, bk.yaw, 1.0f);*/
+
+		// D. BANCAS DE EQUIPOS Y MADERA
 		for (const Banca& bk : bancasFila)
-			dibujarSobreSuelo(*bk.m, BANCAS_DIST, bk.z, bk.yaw, 1.0f);
+		{
+			float escala = (bk.m == &bancaMadera)
+				? BANCA_MADERA_ESCALA
+				: BANCA_JUGADOR_ESCALA;
+
+			dibujarSobreSuelo(*bk.m, BANCAS_DIST, bk.z, bk.yaw, escala);
+		}
 
 		// E. BARRERAS DE PROTECCIÓN
 		for (int i = 0; i < 4; i++)
