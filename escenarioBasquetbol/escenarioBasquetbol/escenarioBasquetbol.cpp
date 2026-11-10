@@ -213,12 +213,14 @@ struct Personaje {
 	float amplitud = 0.0f;
 	float velocidad = 2.0f;
 	float fase = 0.0f;
+	bool balanceoFrontal = false;   // true=oscilan adelante-atrás
 	glm::mat4 mundo[PARTES_CUERPO];
 	glm::mat4 cabeza = glm::mat4(1.0f);
 
 	glm::vec3 PosicionCabeza() const { return glm::vec3(cabeza[3]); }
 	glm::vec3 FrenteCabeza() const { return glm::normalize(glm::vec3(cabeza * glm::vec4(0.0f, 0.0f, 1.0f, 0.0f))); }
 	glm::vec3 ArribaCabeza() const { return glm::normalize(glm::vec3(cabeza * glm::vec4(0.0f, 1.0f, 0.0f, 0.0f))); }
+
 };
 
 static Rig CrearRig(Model* partes[PARTES_CUERPO], float alturaDeseada, const char* nombre)
@@ -287,7 +289,9 @@ static void ActualizarPersonaje(Personaje& p, float t)
 	for (int i = 0; i < PARTES_CUERPO; i++)
 	{
 		glm::mat4 rot = glm::rotate(I, glm::radians(p.pose.y[i]), ejeY)
-			* glm::rotate(I, glm::radians(p.pose.x[i] + animX[i]), ejeX);
+			* glm::rotate(I, glm::radians(p.pose.x[i]), ejeX);
+		//balanceo de la caminata
+		rot = rot * glm::rotate(I, glm::radians(animX[i]), p.balanceoFrontal ? glm::vec3(0.0f, 0.0f, 1.0f) : ejeX);
 
 		if (i == TORSO)
 			p.mundo[i] = base * glm::translate(I, r.junta[TORSO]) * rot;
@@ -308,6 +312,14 @@ static void DibujarPersonaje(const Personaje& p, Shader& shader, GLint modelLoc)
 		r.modelo[i]->Draw(shader);
 	}
 }
+
+// Personaje controlable por user
+Personaje jugadorP;
+float jugadorRumbo = 0.0f; // hacia donde ve
+const float JUGADOR_VELOCIDAD = 4.0f; 
+const float JUGADOR_GIRO_VEL = 120.0f; 
+const float JUGADOR_LIMITE = 11.0f;
+const float JUGADOR_YAW_AJUSTE = -90.0f;   // corrige hacia dónde mira
 
 int main()
 {
@@ -608,6 +620,13 @@ int main()
 	arbitroP.yaw = 180.0f;
 	arbitroP.amplitud = ANIMAR_PERSONAJES ? PERSONAJES_AMPLITUD * 0.4f : 0.0f;
 
+	jugadorP.rig = &rigBulls;
+	jugadorP.posicion = glm::vec3(5.0f, SUELO_Y, 0.0f);
+	jugadorP.balanceoFrontal = true;
+	jugadorP.amplitud = 0.0f;
+	jugadorP.velocidad = 6.0f;
+	jugadorP.yaw = -jugadorRumbo + JUGADOR_YAW_AJUSTE;
+
 	for (int i = 0; i < 5; i++)
 	{
 		bulls[i].rig = &rigBulls;
@@ -640,6 +659,8 @@ int main()
 		Animation();
 
 		ActualizarPersonaje(arbitroP, currentFrame);
+		ActualizarPersonaje(jugadorP, currentFrame);
+
 		for (int i = 0; i < 5; i++)
 		{
 			ActualizarPersonaje(bulls[i], currentFrame);
@@ -759,6 +780,8 @@ int main()
 
 		// ÁRBITRO Y JUGADORES (Cerca del centro)
 		DibujarPersonaje(arbitroP, lightingShader, modelLoc);
+		DibujarPersonaje(jugadorP, lightingShader, modelLoc);
+
 		for (int i = 0; i < 5; i++)
 		{
 			DibujarPersonaje(bulls[i], lightingShader, modelLoc);
@@ -949,10 +972,32 @@ int main()
 
 void UserInputs()
 {
-	if (keys[GLFW_KEY_W] || keys[GLFW_KEY_UP])    camera.ProcessKeyboard(FORWARD, deltaTime);
-	if (keys[GLFW_KEY_S] || keys[GLFW_KEY_DOWN])  camera.ProcessKeyboard(BACKWARD, deltaTime);
-	if (keys[GLFW_KEY_A] || keys[GLFW_KEY_LEFT])  camera.ProcessKeyboard(LEFT, deltaTime);
-	if (keys[GLFW_KEY_D] || keys[GLFW_KEY_RIGHT]) camera.ProcessKeyboard(RIGHT, deltaTime);
+	if (keys[GLFW_KEY_W]) camera.ProcessKeyboard(FORWARD, deltaTime);
+	if (keys[GLFW_KEY_S]) camera.ProcessKeyboard(BACKWARD, deltaTime);
+	if (keys[GLFW_KEY_A]) camera.ProcessKeyboard(LEFT, deltaTime);
+	if (keys[GLFW_KEY_D]) camera.ProcessKeyboard(RIGHT, deltaTime);
+
+	if (keys[GLFW_KEY_LEFT])  jugadorRumbo -= JUGADOR_GIRO_VEL * deltaTime;
+	if (keys[GLFW_KEY_RIGHT]) jugadorRumbo += JUGADOR_GIRO_VEL * deltaTime;
+
+	float rad = glm::radians(jugadorRumbo);
+	glm::vec3 frente(std::sin(rad), 0.0f, -std::cos(rad));  
+
+	float avance = 0.0f;
+	if (keys[GLFW_KEY_UP])   avance += 1.0f;
+	if (keys[GLFW_KEY_DOWN]) avance -= 1.0f;
+
+	if (avance != 0.0f){
+		jugadorP.posicion += frente * avance * JUGADOR_VELOCIDAD * deltaTime;
+		jugadorP.posicion.x = glm::clamp(jugadorP.posicion.x, -JUGADOR_LIMITE, JUGADOR_LIMITE);
+		jugadorP.posicion.z = glm::clamp(jugadorP.posicion.z, -JUGADOR_LIMITE, JUGADOR_LIMITE);
+		jugadorP.amplitud = 0.5f;
+	}
+	else{
+		jugadorP.amplitud = 0.0f;
+	}
+
+	jugadorP.yaw = -jugadorRumbo + JUGADOR_YAW_AJUSTE;
 }
 
 void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mode)
