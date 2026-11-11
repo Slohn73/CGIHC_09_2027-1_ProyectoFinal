@@ -1,6 +1,7 @@
 #version 330 core
 
 #define NUMBER_OF_POINT_LIGHTS 4
+#define NR_SPOT_LIGHTS 4
 
 struct Material
 {
@@ -59,7 +60,7 @@ out vec4 color;
 uniform vec3 viewPos;
 uniform DirLight dirLight;
 uniform PointLight pointLights[NUMBER_OF_POINT_LIGHTS];
-uniform SpotLight spotLight;
+uniform SpotLight spotLights[NR_SPOT_LIGHTS]; 
 uniform Material material;
 uniform int transparency;
 
@@ -97,7 +98,9 @@ void main()
     }
 
     // Luz Spot
-    result += CalcSpotLight(spotLight, norm, FragPos, viewDir, baseColor, specColor);
+    for (int i = 0; i < NR_SPOT_LIGHTS; i++) {
+        result += CalcSpotLight(spotLights[i], norm, FragPos, viewDir, baseColor, specColor);
+    }
 
     // Agregar Emisivo
     result += material.emissive;

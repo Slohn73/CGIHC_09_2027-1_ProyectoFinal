@@ -1042,7 +1042,7 @@ int main()
 		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(marcadorModel));
 		marcador.Draw(lightingShader);
 
-		//REFLECTORES EN VIGAS
+		//REFLECTORES
 		glm::vec3 minB = marcador.GetBoundsMin();
 		glm::vec3 maxB = marcador.GetBoundsMax();
 
@@ -1059,15 +1059,36 @@ int main()
 		const float ESCALA_REFLECTOR_LOCAL = 0.05f;
 
 		for (int i = 0; i < 4; i++) {
+			float fase = i * 1.5707963f; // Desfase temporal entre cada reflector
+			float yawAnim = 35.0f * std::sin(currentFrame * 1.5f + fase);
+			float pitchAnim = 15.0f * std::sin(currentFrame * 3.0f + fase);
+
 			glm::mat4 spotModel = marcadorModel;
 			spotModel = glm::translate(spotModel, esquinasLocales[i]);
 
 			float yawReflector = 45.0f + (i * 90.0f);
-			spotModel = glm::rotate(spotModel, glm::radians(yawReflector), glm::vec3(0.0f, 1.0f, 0.0f));
+			spotModel = glm::rotate(spotModel, glm::radians(yawReflector + yawAnim), glm::vec3(0.0f, 1.0f, 0.0f));
+			spotModel = glm::rotate(spotModel, glm::radians(25.0f + pitchAnim), glm::vec3(1.0f, 0.0f, 0.0f));
 			spotModel = glm::scale(spotModel, glm::vec3(ESCALA_REFLECTOR_LOCAL));
 
 			glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(spotModel));
 			spotlight.Draw(lightingShader);
+
+			//extrae la posición de origen y la dirección del haz de luz
+			glm::vec3 spotPos = glm::vec3(spotModel * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
+			glm::vec3 spotDir = glm::normalize(glm::mat3(spotModel) * glm::vec3(0.0f, -0.6f, 1.0f));
+
+			std::string base = "spotLights[" + std::to_string(i) + "].";
+			SetVec3(lightingShader.Program, base + "position", spotPos.x, spotPos.y, spotPos.z);
+			SetVec3(lightingShader.Program, base + "direction", spotDir.x, spotDir.y, spotDir.z);
+			SetVec3(lightingShader.Program, base + "ambient", 0.09f, 0.09f, 0.09f);
+			SetVec3(lightingShader.Program, base + "diffuse", 1.0f, 0.95f, 0.85f); 
+			SetVec3(lightingShader.Program, base + "specular", 1.0f, 1.0f, 1.0f);
+			SetFloat(lightingShader.Program, base + "constant", 1.0f);
+			SetFloat(lightingShader.Program, base + "linear", 0.022f);
+			SetFloat(lightingShader.Program, base + "quadratic", 0.0019f);
+			SetFloat(lightingShader.Program, base + "cutOff", glm::cos(glm::radians(18.0f)));
+			SetFloat(lightingShader.Program, base + "outerCutOff", glm::cos(glm::radians(26.0f)));
 		}
 
 		// BANCAS DE EQUIPOS Y MADERA
