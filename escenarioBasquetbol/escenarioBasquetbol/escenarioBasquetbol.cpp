@@ -41,6 +41,7 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mode
 void MouseCallback(GLFWwindow* window, double xPos, double yPos);
 void UserInputs();
 void Animation();
+void IniciarTiroLibre();
 
 // Dimensiones de la ventana
 const GLuint WIDTH = 800, HEIGHT = 600;
@@ -200,9 +201,11 @@ struct Rig {
 	float escala;
 };
 
-struct Pose {
+struct Pose
+{
 	float x[PARTES_CUERPO] = {};
 	float y[PARTES_CUERPO] = {};
+	float z[PARTES_CUERPO] = {};
 };
 
 struct Personaje {
@@ -288,8 +291,12 @@ static void ActualizarPersonaje(Personaje& p, float t)
 
 	for (int i = 0; i < PARTES_CUERPO; i++)
 	{
-		glm::mat4 rot = glm::rotate(I, glm::radians(p.pose.y[i]), ejeY)
-			* glm::rotate(I, glm::radians(p.pose.x[i]), ejeX);
+		glm::mat4 rot =
+			glm::rotate(I, glm::radians(p.pose.y[i]), ejeY)
+			* glm::rotate(I, glm::radians(p.pose.x[i]), ejeX)
+			* glm::rotate(I, glm::radians(p.pose.z[i]), glm::vec3(0.0f, 0.0f, 1.0f)
+			);
+
 		//balanceo de la caminata
 		rot = rot * glm::rotate(I, glm::radians(animX[i]), p.balanceoFrontal ? glm::vec3(0.0f, 0.0f, 1.0f) : ejeX);
 
@@ -322,6 +329,45 @@ const float JUGADOR_GIRO_VEL = 120.0f;
 const float JUGADOR_LIMITE = 11.0f;
 const float JUGADOR_YAW_AJUSTE = -90.0f;   // corrige hacia dónde mira
 
+// ANIMACION POR KEYFRAMES - TIRO LIBRE
+struct KeyFrameTiro
+{
+	float tiempo;
+	float torsoX;
+	float bicepDerZ;
+	float bicepIzqZ;
+	float antebrazoDerZ;
+	float antebrazoIzqZ;
+	float manoDerZ;
+	float manoIzqZ;
+};
+
+const int NUM_KEYFRAMES_TIRO = 7;
+
+KeyFrameTiro keyframesTiro[NUM_KEYFRAMES_TIRO];
+
+bool tiroActivo = false;
+float tiempoTiro = 0.0f;
+int indiceTiro = 0;
+
+glm::vec3 balonPos(0.0f, 0.2f, 0.0f);
+float balonRot = 0.0f;
+
+
+// Centro del aro
+const glm::vec3 POS_ARO_TIRO(0.0f, 3.08f, 8.62f);
+
+// Estas posiciones se calcularan cada vez segun donde se encuentre el jugador
+glm::vec3 BALON_INICIAL(0.0f);
+glm::vec3 BALON_CABEZA(0.0f);
+glm::vec3 BALON_LIBERACION(0.0f);
+
+// Altura de la parabola
+float ALTURA_ARCO = 1.40f;
+
+const float TIEMPO_LIBERACION = 0.90f;
+const float TIEMPO_ARO = 2.05f;
+const float TIEMPO_FIN = 2.60f;
 
 // Se usa un enum para poner los modos de la camara
 enum ModoCamara { CAMARA_LIBRE = 1, CAMARA_PRIMERA = 2, CAMARA_TERCERA = 3 };
@@ -357,6 +403,140 @@ void ObtenerCamaraActiva(glm::vec3& pos, glm::mat4& view)
 		pos = camera.GetPosition();
 		view = camera.GetViewMatrix();
 	}
+}
+
+void IniciarTiroLibre()
+{
+	if (tiroActivo)
+		return;
+
+	tiroActivo = true;
+	tiempoTiro = 0.0f;
+	indiceTiro = 0;
+
+	// Detener completamente el balanceo de caminata
+	jugadorP.amplitud = 0.0f;
+
+	// Direccion desde la posicion ACTUAL del jugador hacia el aro
+	glm::vec3 haciaAro(POS_ARO_TIRO.x - jugadorP.posicion.x, 0.0f, POS_ARO_TIRO.z - jugadorP.posicion.z);
+
+	float distanciaAro = glm::length(haciaAro);
+
+	glm::vec3 frente = glm::normalize(haciaAro);
+
+	// Vector hacia la derecha del jugador
+	glm::vec3 derecha = glm::normalize(glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), frente));
+
+	// Hacer que el jugador mire hacia la canasta
+	jugadorRumbo =glm::degrees(std::atan2(frente.x, -frente.z));
+
+	jugadorP.yaw = -jugadorRumbo + JUGADOR_YAW_AJUSTE;
+
+	// Balon frente al cuerpo
+	BALON_INICIAL = jugadorP.posicion + derecha * 0.16f + frente * 0.25f + glm::vec3(0.0f, 1.10f, 0.0f);
+
+	// Balon frente a la cabeza
+	BALON_CABEZA = jugadorP.posicion + derecha * 0.12f + frente * 0.38f + glm::vec3(0.0f, 1.80f, 0.0f);
+
+	// Punto donde se libera
+	BALON_LIBERACION = jugadorP.posicion + derecha * 0.10f + frente * 0.55f + glm::vec3(0.0f, 2.13f, 0.0f);
+
+	// Hacer el arco un poco mayor si el jugador esta lejos
+	ALTURA_ARCO = glm::clamp(distanciaAro * 0.18f, 0.90f, 2.00f);
+
+	// Borrar cualquier pose anterior
+	jugadorP.pose = Pose();
+
+	// KF 0 - Balon frente al cuerpo
+	keyframesTiro[0] = {
+		0.0f,
+		3.0f,
+		 15.0f,    // bicep derecho
+		-15.0f,    // bicep izquierdo
+		 45.0f,    // antebrazo derecho
+		-45.0f,    // antebrazo izquierdo
+		 0.0f,
+		 0.0f
+	};
+
+	// KF 1 - Flexion / preparacion
+	keyframesTiro[1] = {
+		0.30f,
+		6.0f,
+		 22.0f,
+		-22.0f,
+		 58.0f,
+		-58.0f,
+		 0.0f,
+		 0.0f
+	};
+
+	// KF 2 - Balon frente a la cara
+	keyframesTiro[2] = {
+		0.65f,
+		3.0f,
+		 42.0f,
+		-42.0f,
+		 52.0f,
+		-52.0f,
+		 0.0f,
+		 0.0f
+	};
+
+	// KF 3 - Liberacion
+	keyframesTiro[3] = {
+		0.90f,
+		0.0f,
+		 62.0f,
+		-62.0f,
+		 30.0f,
+		-30.0f,
+		 8.0f,
+		-3.0f
+	};
+
+	// KF 4 - Follow-through
+	keyframesTiro[4] = {
+		1.25f,
+		0.0f,
+		 70.0f,
+		-70.0f,
+		 15.0f,
+		-15.0f,
+		 18.0f,
+		-5.0f
+	};
+
+	// KF 5 - Regreso de brazos
+	keyframesTiro[5] = {
+		2.10f,
+		0.0f,
+		 30.0f,
+		-30.0f,
+		 20.0f,
+		-20.0f,
+		 5.0f,
+		-5.0f
+	};
+
+	// KF 6 - Pose normal
+	keyframesTiro[6] = {
+		2.60f,
+		0.0f,
+		0.0f,
+		0.0f,
+		0.0f,
+		0.0f,
+		0.0f,
+		0.0f
+	};
+
+	balonPos = BALON_INICIAL;
+	balonRot = 0.0f;
+
+	std::cout
+		<< "[ANIMACION] Tiro libre iniciado"
+		<< std::endl;
 }
 
 int main()
@@ -832,8 +1012,28 @@ int main()
 			DibujarPersonaje(lakers[i], lightingShader, modelLoc);
 		}
 
-		// BALÓN DE BALONCESTO
-		dibujarSobreSuelo(balon, BALON_X, BALON_Z, 0.0f, BALON_ESCALA);
+		// BALON DE BASQUETBOL
+		glm::vec3 balonMin = balon.GetBoundsMin();
+		glm::vec3 balonMax = balon.GetBoundsMax();
+		glm::vec3 balonCentro = (balonMin + balonMax) * 0.5f;
+
+		glm::mat4 balonModel(1.0f);
+
+		// Posicion generada por los keyframes
+		balonModel = glm::translate(balonModel, balonPos);
+
+		// Rotacion del balon durante el tiro
+		balonModel = glm::rotate( balonModel, glm::radians(balonRot), glm::vec3(1.0f, 0.0f, 0.0f));
+
+		// Escala original
+		balonModel = glm::scale( balonModel, glm::vec3(BALON_ESCALA));
+
+		// Centrar el modelo sobre su origen
+		balonModel = glm::translate(balonModel, -balonCentro);
+
+		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(balonModel));
+
+		balon.Draw(lightingShader);
 
 		// MARCADOR ELECTRÓNICO
 		glm::mat4 marcadorModel(1.0f);
@@ -1014,36 +1214,99 @@ int main()
 	return 0;
 }
 
-void UserInputs(){
-	if (modoCamara == CAMARA_LIBRE){
-		if (keys[GLFW_KEY_W]) camera.ProcessKeyboard(FORWARD, deltaTime);
-		if (keys[GLFW_KEY_S]) camera.ProcessKeyboard(BACKWARD, deltaTime);
-		if (keys[GLFW_KEY_A]) camera.ProcessKeyboard(LEFT, deltaTime);
-		if (keys[GLFW_KEY_D]) camera.ProcessKeyboard(RIGHT, deltaTime);
+void UserInputs()
+{
+	// CAMARA LIBRE
+	if (modoCamara == CAMARA_LIBRE)
+	{
+		if (keys[GLFW_KEY_W])
+			camera.ProcessKeyboard(FORWARD, deltaTime);
+
+		if (keys[GLFW_KEY_S])
+			camera.ProcessKeyboard(BACKWARD, deltaTime);
+
+		if (keys[GLFW_KEY_A])
+			camera.ProcessKeyboard(LEFT, deltaTime);
+
+		if (keys[GLFW_KEY_D])
+			camera.ProcessKeyboard(RIGHT, deltaTime);
 	}
 
-	if (keys[GLFW_KEY_LEFT])  jugadorRumbo -= JUGADOR_GIRO_VEL * deltaTime;
-	if (keys[GLFW_KEY_RIGHT]) jugadorRumbo += JUGADOR_GIRO_VEL * deltaTime;
+	// BLOQUEO DURANTE EL TIRO. Evita que la animacion de caminata se mezcle con los keyframes
+	if (tiroActivo)
+	{
+		jugadorP.amplitud = 0.0f;
+		return;
+	}
 
-	//float rad = glm::radians(jugadorRumbo);
-	//glm::vec3 frente(std::sin(rad), 0.0f, -std::cos(rad));  
-	glm::vec3 frente = FrenteJugador();
+	// GIRO DEL JUGADOR
+	if (keys[GLFW_KEY_LEFT])
+	{
+		jugadorRumbo -= JUGADOR_GIRO_VEL * deltaTime;
+	}
 
+	if (keys[GLFW_KEY_RIGHT])
+	{
+		jugadorRumbo += JUGADOR_GIRO_VEL * deltaTime;
+	}
+
+
+	glm::vec3 frente =
+		FrenteJugador();
+
+
+	// MOVIMIENTO DEL JUGADOR
 	float avance = 0.0f;
-	if (keys[GLFW_KEY_UP]) avance += 1.0f;
-	if (keys[GLFW_KEY_DOWN]) avance -= 1.0f;
 
-	if (avance != 0.0f){
-		jugadorP.posicion += frente * avance * JUGADOR_VELOCIDAD * deltaTime;
-		jugadorP.posicion.x = glm::clamp(jugadorP.posicion.x, -JUGADOR_LIMITE, JUGADOR_LIMITE);
-		jugadorP.posicion.z = glm::clamp(jugadorP.posicion.z, -JUGADOR_LIMITE, JUGADOR_LIMITE);
+	if (keys[GLFW_KEY_UP])
+	{
+		avance += 1.0f;
+	}
+
+	if (keys[GLFW_KEY_DOWN])
+	{
+		avance -= 1.0f;
+	}
+
+
+	if (avance != 0.0f)
+	{
+		jugadorP.posicion +=
+			frente *
+			avance *
+			JUGADOR_VELOCIDAD *
+			deltaTime;
+
+
+		jugadorP.posicion.x =
+			glm::clamp(
+				jugadorP.posicion.x,
+				-JUGADOR_LIMITE,
+				JUGADOR_LIMITE
+			);
+
+
+		jugadorP.posicion.z =
+			glm::clamp(
+				jugadorP.posicion.z,
+				-JUGADOR_LIMITE,
+				JUGADOR_LIMITE
+			);
+
+
+		// Activar balanceo solamente al caminar
 		jugadorP.amplitud = 0.5f;
 	}
-	else{
+	else
+	{
 		jugadorP.amplitud = 0.0f;
 	}
 
-	jugadorP.yaw = -jugadorRumbo + JUGADOR_YAW_AJUSTE;
+
+	// Actualizar orientacion del modelo
+	jugadorP.yaw =
+		-jugadorRumbo +
+		JUGADOR_YAW_AJUSTE;
 }
 
 void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mode)
@@ -1058,13 +1321,148 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mode
 	}
 
 	if (action == GLFW_PRESS){
+		// Modos de camara
 		if (key == GLFW_KEY_1) modoCamara = CAMARA_LIBRE;
 		if (key == GLFW_KEY_2) modoCamara = CAMARA_PRIMERA;
 		if (key == GLFW_KEY_3) modoCamara = CAMARA_TERCERA;
+
+		// Animacion por keyframes
+		if (key == GLFW_KEY_SPACE)
+		{
+			IniciarTiroLibre();
+		}
+
 	}
 }
 
-void Animation() {}
+void Animation()
+{
+	if (!tiroActivo)
+		return;
+	// Garantizar que la caminata JAMAS se mezcle
+	jugadorP.amplitud = 0.0f;
+
+	tiempoTiro += deltaTime;
+
+	// BUSCAR SEGMENTO DE KEYFRAMES
+	while (indiceTiro < NUM_KEYFRAMES_TIRO - 2 && tiempoTiro > keyframesTiro[indiceTiro + 1].tiempo)
+	{
+		indiceTiro++;
+	}
+
+	const KeyFrameTiro& a = keyframesTiro[indiceTiro];
+
+	const KeyFrameTiro& b = keyframesTiro[indiceTiro + 1];
+
+	float duracion = b.tiempo - a.tiempo;
+
+	float tPose = 0.0f;
+
+	if (duracion > 0.0f)
+	{
+		tPose = (tiempoTiro - a.tiempo) / duracion;
+	}
+
+
+	tPose = glm::clamp(tPose, 0.0f, 1.0f);
+
+
+	// Smoothstep manual
+	// evita cambios bruscos entre keyframes
+	tPose = tPose * tPose * (3.0f - 2.0f * tPose);
+
+
+	// POSE DEL JUGADOR
+	jugadorP.pose.x[TORSO] = glm::mix(a.torsoX, b.torsoX, tPose);
+
+
+	// Bíceps
+	jugadorP.pose.z[BICEP_DER] = glm::mix(a.bicepDerZ, b.bicepDerZ, tPose);
+	jugadorP.pose.z[BICEP_IZQ] = glm::mix(a.bicepIzqZ, b.bicepIzqZ, tPose);
+
+	// Antebrazos
+	jugadorP.pose.z[ANTEBRAZO_DER] = glm::mix( a.antebrazoDerZ, b.antebrazoDerZ, tPose);
+	jugadorP.pose.z[ANTEBRAZO_IZQ] = glm::mix(a.antebrazoIzqZ, b.antebrazoIzqZ, tPose);
+
+	// Manos
+	jugadorP.pose.z[MANO_DER] = glm::mix(a.manoDerZ, b.manoDerZ, tPose);
+	jugadorP.pose.z[MANO_IZQ] = glm::mix(a.manoIzqZ, b.manoIzqZ, tPose);
+
+	// BALON: CUERPO -> CABEZA
+	if (tiempoTiro < 0.65f)
+	{
+		float t = tiempoTiro / 0.65f;
+		t = glm::clamp(t, 0.0f, 1.0f);
+
+		// Suavizar
+		t = t * t * (3.0f - 2.0f * t);
+
+		balonPos = glm::mix(BALON_INICIAL,	BALON_CABEZA, t);
+	}
+
+	// CABEZA -> LIBERACION
+	else if (tiempoTiro < TIEMPO_LIBERACION)
+	{
+		float t = (tiempoTiro - 0.65f) / (TIEMPO_LIBERACION - 0.65f);
+
+		t = glm::clamp(t, 0.0f,1.0f);
+
+		balonPos = glm::mix(BALON_CABEZA, BALON_LIBERACION, t);
+	}
+
+// VUELO PARABOLICO DIRECTO AL ARO
+	else if (tiempoTiro < TIEMPO_ARO)
+	{
+		float t = (tiempoTiro - TIEMPO_LIBERACION) / (TIEMPO_ARO - TIEMPO_LIBERACION);
+
+		t = glm::clamp(t, 0.0f, 1.0f);
+
+		// Movimiento directo desde la mano hasta el aro
+		balonPos = glm::mix( BALON_LIBERACION, POS_ARO_TIRO, t);
+
+		// Arco parabolico
+		float arco = 4.0f * ALTURA_ARCO * t * (1.0f - t);
+
+		balonPos.y += arco;
+
+		balonRot += 300.0f * deltaTime;
+	}
+
+	// BALON DESPUES DE ENCESTAR
+
+	else
+	{
+		float t = (tiempoTiro - TIEMPO_ARO) / (TIEMPO_FIN - TIEMPO_ARO);
+
+		t = glm::clamp(	t, 0.0f, 1.0f);
+
+		glm::vec3 debajoAro = POS_ARO_TIRO + glm::vec3(0.0f, -1.80f, 0.0f);
+
+		balonPos = glm::mix( POS_ARO_TIRO, debajoAro, t);
+
+		balonRot += 300.0f * deltaTime;
+	}
+
+	// FINAL DE ANIMACION
+	if (tiempoTiro >= TIEMPO_FIN)
+	{
+		tiroActivo = false;
+
+		tiempoTiro = 0.0f;
+		indiceTiro = 0;
+
+		// Pose normal
+		jugadorP.pose = Pose();
+
+		// No volver a activar caminata automáticamente
+		jugadorP.amplitud = 0.0f;
+
+
+		std::cout
+			<< "[ANIMACION] Tiro libre terminado"
+			<< std::endl;
+	}
+}
 
 void MouseCallback(GLFWwindow* window, double xPos, double yPos)
 {
