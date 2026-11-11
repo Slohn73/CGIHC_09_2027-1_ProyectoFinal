@@ -17,6 +17,11 @@
 #include <algorithm>
 #include <filesystem>
 
+#include <windows.h>
+#include <mmsystem.h>
+#pragma comment(lib, "winmm.lib")
+
+
 // GLEW
 #include <GL/glew.h>
 
@@ -1357,6 +1362,10 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mode
 			IniciarTiroLibre();
 		}
 
+	}
+
+	if (key == GLFW_KEY_B && action == GLFW_PRESS) {
+		PlaySound(TEXT("sonidos/silbato.wav"), NULL, SND_ASYNC | SND_FILENAME);
 	}
 }
 
