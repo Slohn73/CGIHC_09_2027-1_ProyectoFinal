@@ -302,11 +302,12 @@ static void ActualizarPersonaje(Personaje& p, float t)
 	p.cabeza = p.mundo[CABEZA] * glm::translate(I, r.centro[CABEZA] - r.junta[CABEZA]);
 }
 
-static void DibujarPersonaje(const Personaje& p, Shader& shader, GLint modelLoc)
+static void DibujarPersonaje(const Personaje& p, Shader& shader, GLint modelLoc, bool omitirCabeza = false)
 {
 	const Rig& r = *p.rig;
 	for (int i = 0; i < PARTES_CUERPO; i++)
 	{
+		if (omitirCabeza && i == CABEZA) continue;
 		glm::mat4 m = p.mundo[i] * glm::translate(glm::mat4(1.0f), -r.junta[i]);
 		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(m));
 		r.modelo[i]->Draw(shader);
@@ -320,6 +321,43 @@ const float JUGADOR_VELOCIDAD = 4.0f;
 const float JUGADOR_GIRO_VEL = 120.0f; 
 const float JUGADOR_LIMITE = 11.0f;
 const float JUGADOR_YAW_AJUSTE = -90.0f;   // corrige hacia dónde mira
+
+
+// Se usa un enum para poner los modos de la camara
+enum ModoCamara { CAMARA_LIBRE = 1, CAMARA_PRIMERA = 2, CAMARA_TERCERA = 3 };
+int modoCamara = CAMARA_LIBRE; //indica modo actual
+
+const float TERCERA_DISTANCIA = 5.0f;  //la distancia que tiene en tercera persoan
+const float TERCERA_ALTURA = 2.5f;  
+const float PRIMERA_ADELANTE = 0.15f;  // adelanta la camara para no quedar dentro de la cabeza
+
+// Hacia dónde mira el jugador
+glm::vec3 FrenteJugador()
+{
+	float rad = glm::radians(jugadorRumbo);
+	return glm::vec3(std::sin(rad), 0.0f, -std::cos(rad));
+}
+
+// Calcula posición y matriz de vista de la cámara activa
+void ObtenerCamaraActiva(glm::vec3& pos, glm::mat4& view)
+{
+	const glm::vec3 arriba(0.0f, 1.0f, 0.0f);
+	glm::vec3 frente = FrenteJugador();
+
+	if (modoCamara == CAMARA_PRIMERA){
+		pos = jugadorP.PosicionCabeza() + frente * PRIMERA_ADELANTE;
+		view = glm::lookAt(pos, pos + frente, arriba);
+	}
+	else if (modoCamara == CAMARA_TERCERA){
+		glm::vec3 objetivo = jugadorP.posicion + glm::vec3(0.0f, 1.5f, 0.0f);
+		pos = jugadorP.posicion - frente * TERCERA_DISTANCIA + glm::vec3(0.0f, TERCERA_ALTURA, 0.0f);
+		view = glm::lookAt(pos, objetivo, arriba);
+	}
+	else{
+		pos = camera.GetPosition();
+		view = camera.GetViewMatrix();
+	}
+}
 
 int main()
 {
@@ -675,8 +713,15 @@ int main()
 
 		lightingShader.Use();
 
+		glm::vec3 camPos;
+		glm::mat4 view;
+		ObtenerCamaraActiva(camPos, view);
+
 		GLint viewPosLoc = glGetUniformLocation(lightingShader.Program, "viewPos");
-		glUniform3f(viewPosLoc, camera.GetPosition().x, camera.GetPosition().y, camera.GetPosition().z);
+		glUniform3f(viewPosLoc, camPos.x, camPos.y, camPos.z);
+
+		//GLint viewPosLoc = glGetUniformLocation(lightingShader.Program, "viewPos");
+		//glUniform3f(viewPosLoc, camera.GetPosition().x, camera.GetPosition().y, camera.GetPosition().z);
 
 		// Luz direccional
 		glUniform3f(glGetUniformLocation(lightingShader.Program, "dirLight.direction"), -0.2f, -1.0f, -0.3f);
@@ -695,7 +740,7 @@ int main()
 
 		glUniform1f(glGetUniformLocation(lightingShader.Program, "material.shininess"), 32.0f);
 
-		glm::mat4 view = camera.GetViewMatrix();
+		//glm::mat4 view = camera.GetViewMatrix();
 
 		GLint modelLoc = glGetUniformLocation(lightingShader.Program, "model");
 		GLint viewLoc = glGetUniformLocation(lightingShader.Program, "view");
@@ -778,17 +823,16 @@ int main()
 		cancha.Draw(lightingShader);
 		glDisable(GL_BLEND);
 
-		// ÁRBITRO Y JUGADORES (Cerca del centro)
+		// ÁRBITRO Y JUGADORE
 		DibujarPersonaje(arbitroP, lightingShader, modelLoc);
-		DibujarPersonaje(jugadorP, lightingShader, modelLoc);
+		DibujarPersonaje(jugadorP, lightingShader, modelLoc, modoCamara == CAMARA_PRIMERA);
 
-		for (int i = 0; i < 5; i++)
-		{
+		for (int i = 0; i < 5; i++){
 			DibujarPersonaje(bulls[i], lightingShader, modelLoc);
 			DibujarPersonaje(lakers[i], lightingShader, modelLoc);
 		}
 
-		// BALÓN DE BALONCESTO (Al centro de la cancha)
+		// BALÓN DE BALONCESTO
 		dibujarSobreSuelo(balon, BALON_X, BALON_Z, 0.0f, BALON_ESCALA);
 
 		// MARCADOR ELECTRÓNICO
@@ -970,21 +1014,23 @@ int main()
 	return 0;
 }
 
-void UserInputs()
-{
-	if (keys[GLFW_KEY_W]) camera.ProcessKeyboard(FORWARD, deltaTime);
-	if (keys[GLFW_KEY_S]) camera.ProcessKeyboard(BACKWARD, deltaTime);
-	if (keys[GLFW_KEY_A]) camera.ProcessKeyboard(LEFT, deltaTime);
-	if (keys[GLFW_KEY_D]) camera.ProcessKeyboard(RIGHT, deltaTime);
+void UserInputs(){
+	if (modoCamara == CAMARA_LIBRE){
+		if (keys[GLFW_KEY_W]) camera.ProcessKeyboard(FORWARD, deltaTime);
+		if (keys[GLFW_KEY_S]) camera.ProcessKeyboard(BACKWARD, deltaTime);
+		if (keys[GLFW_KEY_A]) camera.ProcessKeyboard(LEFT, deltaTime);
+		if (keys[GLFW_KEY_D]) camera.ProcessKeyboard(RIGHT, deltaTime);
+	}
 
 	if (keys[GLFW_KEY_LEFT])  jugadorRumbo -= JUGADOR_GIRO_VEL * deltaTime;
 	if (keys[GLFW_KEY_RIGHT]) jugadorRumbo += JUGADOR_GIRO_VEL * deltaTime;
 
-	float rad = glm::radians(jugadorRumbo);
-	glm::vec3 frente(std::sin(rad), 0.0f, -std::cos(rad));  
+	//float rad = glm::radians(jugadorRumbo);
+	//glm::vec3 frente(std::sin(rad), 0.0f, -std::cos(rad));  
+	glm::vec3 frente = FrenteJugador();
 
 	float avance = 0.0f;
-	if (keys[GLFW_KEY_UP])   avance += 1.0f;
+	if (keys[GLFW_KEY_UP]) avance += 1.0f;
 	if (keys[GLFW_KEY_DOWN]) avance -= 1.0f;
 
 	if (avance != 0.0f){
@@ -1010,6 +1056,12 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mode
 		if (action == GLFW_PRESS) keys[key] = true;
 		else if (action == GLFW_RELEASE) keys[key] = false;
 	}
+
+	if (action == GLFW_PRESS){
+		if (key == GLFW_KEY_1) modoCamara = CAMARA_LIBRE;
+		if (key == GLFW_KEY_2) modoCamara = CAMARA_PRIMERA;
+		if (key == GLFW_KEY_3) modoCamara = CAMARA_TERCERA;
+	}
 }
 
 void Animation() {}
@@ -1029,5 +1081,6 @@ void MouseCallback(GLFWwindow* window, double xPos, double yPos)
 	lastX = xPos;
 	lastY = yPos;
 
-	camera.ProcessMouseMovement(xOffset, yOffset);
+	if (modoCamara == CAMARA_LIBRE)
+		camera.ProcessMouseMovement(xOffset, yOffset);
 }
