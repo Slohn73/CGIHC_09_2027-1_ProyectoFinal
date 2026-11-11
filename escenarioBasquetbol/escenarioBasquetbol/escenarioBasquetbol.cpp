@@ -353,6 +353,8 @@ int indiceTiro = 0;
 glm::vec3 balonPos(0.0f, 0.2f, 0.0f);
 float balonRot = 0.0f;
 
+//estado de reflectores
+bool reflectoresEncendidos = true;
 
 // Centro del aro
 const glm::vec3 POS_ARO_TIRO(0.0f, 3.08f, 8.62f);
@@ -1042,7 +1044,7 @@ int main()
 		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(marcadorModel));
 		marcador.Draw(lightingShader);
 
-		//REFLECTORES
+		// --- REFLECTORES
 		glm::vec3 minB = marcador.GetBoundsMin();
 		glm::vec3 maxB = marcador.GetBoundsMax();
 
@@ -1058,10 +1060,33 @@ int main()
 
 		const float ESCALA_REFLECTOR_LOCAL = 0.05f;
 
+		glm::vec3 coloresReflectores[4] = {
+			glm::vec3(1.0f, 0.05f, 0.2f), 
+			glm::vec3(0.0f, 0.75f, 1.0f), 
+			glm::vec3(0.1f, 1.0f, 0.2f),
+			glm::vec3(1.0f, 0.65f, 0.0f)  
+		};
+
 		for (int i = 0; i < 4; i++) {
-			float fase = i * 1.5707963f; // Desfase temporal entre cada reflector
-			float yawAnim = 35.0f * std::sin(currentFrame * 1.5f + fase);
-			float pitchAnim = 15.0f * std::sin(currentFrame * 3.0f + fase);
+			float yawAnim = 0.0f;
+			float pitchAnim = 0.0f;
+			glm::vec3 colorLuz;
+			float multiplicadorBrillo;
+
+			if (reflectoresEncendidos) {
+				//MODO SHOW
+				float fase = i * 1.5707963f;
+				yawAnim = 35.0f * std::sin(currentFrame * 1.5f + fase);
+				pitchAnim = 15.0f * std::sin(currentFrame * 3.0f + fase);
+
+				colorLuz = coloresReflectores[i];
+				multiplicadorBrillo = 3.5f; // Potencia el color
+			}
+			else {
+				// MODO REPOSO
+				colorLuz = glm::vec3(1.0f, 1.0f, 1.0f);
+				multiplicadorBrillo = 2.0f;
+			}
 
 			glm::mat4 spotModel = marcadorModel;
 			spotModel = glm::translate(spotModel, esquinasLocales[i]);
@@ -1071,24 +1096,25 @@ int main()
 			spotModel = glm::rotate(spotModel, glm::radians(25.0f + pitchAnim), glm::vec3(1.0f, 0.0f, 0.0f));
 			spotModel = glm::scale(spotModel, glm::vec3(ESCALA_REFLECTOR_LOCAL));
 
+			
 			glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(spotModel));
 			spotlight.Draw(lightingShader);
 
-			//extrae la posición de origen y la dirección del haz de luz
 			glm::vec3 spotPos = glm::vec3(spotModel * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
 			glm::vec3 spotDir = glm::normalize(glm::mat3(spotModel) * glm::vec3(0.0f, -0.6f, 1.0f));
 
 			std::string base = "spotLights[" + std::to_string(i) + "].";
 			SetVec3(lightingShader.Program, base + "position", spotPos.x, spotPos.y, spotPos.z);
 			SetVec3(lightingShader.Program, base + "direction", spotDir.x, spotDir.y, spotDir.z);
-			SetVec3(lightingShader.Program, base + "ambient", 0.09f, 0.09f, 0.09f);
-			SetVec3(lightingShader.Program, base + "diffuse", 1.0f, 0.95f, 0.85f); 
-			SetVec3(lightingShader.Program, base + "specular", 1.0f, 1.0f, 1.0f);
+			SetVec3(lightingShader.Program, base + "ambient", 0.04f * colorLuz.r, 0.04f * colorLuz.g, 0.04f * colorLuz.b);
+			SetVec3(lightingShader.Program, base + "diffuse", colorLuz.r * multiplicadorBrillo, colorLuz.g * multiplicadorBrillo, colorLuz.b * multiplicadorBrillo);
+			SetVec3(lightingShader.Program, base + "specular", colorLuz.r * multiplicadorBrillo, colorLuz.g * multiplicadorBrillo, colorLuz.b * multiplicadorBrillo);
+
 			SetFloat(lightingShader.Program, base + "constant", 1.0f);
-			SetFloat(lightingShader.Program, base + "linear", 0.022f);
-			SetFloat(lightingShader.Program, base + "quadratic", 0.0019f);
-			SetFloat(lightingShader.Program, base + "cutOff", glm::cos(glm::radians(18.0f)));
-			SetFloat(lightingShader.Program, base + "outerCutOff", glm::cos(glm::radians(26.0f)));
+			SetFloat(lightingShader.Program, base + "linear", 0.014f);
+			SetFloat(lightingShader.Program, base + "quadratic", 0.0007f);
+			SetFloat(lightingShader.Program, base + "cutOff", glm::cos(glm::radians(20.0f)));
+			SetFloat(lightingShader.Program, base + "outerCutOff", glm::cos(glm::radians(30.0f)));
 		}
 
 		// BANCAS DE EQUIPOS Y MADERA
@@ -1202,32 +1228,6 @@ int main()
 		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
 		camaraBroadcast.Draw(lightingShader);
 
-		// Iluminación de techo
-		/*model = glm::mat4(1.0f);
-		model = glm::translate(model, glm::vec3(0.0f, 7.0f, 0.0f));
-		model = glm::scale(model, glm::vec3(0.02f));
-		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
-		ceilingLights.Draw(lightingShader);*/
-
-
-
-		lampShader.Use();
-		modelLoc = glGetUniformLocation(lampShader.Program, "model");
-		viewLoc = glGetUniformLocation(lampShader.Program, "view");
-		projLoc = glGetUniformLocation(lampShader.Program, "projection");
-
-		glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
-		glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
-
-		model = glm::mat4(1);
-		model = glm::translate(model, lightPos);
-		model = glm::scale(model, glm::vec3(0.2f));
-		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
-
-		glBindVertexArray(VAO);
-		glDrawArrays(GL_TRIANGLES, 0, 36);
-		glBindVertexArray(0);
-
 		glfwSwapBuffers(window);
 	}
 
@@ -1339,6 +1339,10 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mode
 	{
 		if (action == GLFW_PRESS) keys[key] = true;
 		else if (action == GLFW_RELEASE) keys[key] = false;
+	}
+
+	if (key == GLFW_KEY_L && action == GLFW_PRESS) {
+		reflectoresEncendidos = !reflectoresEncendidos;
 	}
 
 	if (action == GLFW_PRESS){
